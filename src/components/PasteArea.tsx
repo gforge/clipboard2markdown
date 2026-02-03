@@ -14,7 +14,7 @@ export default function PasteArea({ onConvert, options = {}, activeWhenEmpty = t
 
   const focusPaste = () => ref.current?.focus();
 
-  const handlePaste = (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
+  const handlePaste = async (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
     e.preventDefault();
 
     const htmlFromClipboard = e.clipboardData?.getData('text/html');
@@ -26,9 +26,45 @@ export default function PasteArea({ onConvert, options = {}, activeWhenEmpty = t
       return;
     }
 
-    // Fallback: use plain text
+    if (textFromClipboard) {
+      const md = convertHtmlToMarkdown(`<p>${escapeHtml(textFromClipboard)}</p>`, options);
+      onConvert(md);
+      return;
+    }
+
+    // Try to extract string data from DataTransfer items (covers some PDF viewers / RTF)
+    const items = e.clipboardData?.items;
+    if (items && items.length) {
+      for (const it of items) {
+        if (it.kind === 'string' && it.type.startsWith('text/')) {
+          const text = await new Promise<string | null>((resolve) => {
+            it.getAsString((s) => resolve(s ?? null));
+          });
+          if (text) {
+            const md = convertHtmlToMarkdown(`<p>${escapeHtml(text)}</p>`, options);
+            onConvert(md);
+            return;
+          }
+        }
+      }
+    }
+
+    // As a last resort, try navigator.clipboard.readText() which may succeed in capturing PDF text content
+    await navigator.clipboard
+      .readText()
+      .then((txt) => {
+        if (txt) {
+          const md = convertHtmlToMarkdown(`<p>${escapeHtml(txt)}</p>`, options);
+          onConvert(md);
+        }
+      })
+      .catch(() => {
+        /* ignore - permission may not be granted */
+      });
+
+    // Final fallback: use the hidden textarea's value (older browsers)
     setTimeout(() => {
-      const text = ref.current?.value ?? textFromClipboard ?? '';
+      const text = ref.current?.value ?? '';
       const md = convertHtmlToMarkdown(`<p>${escapeHtml(text)}</p>`, options);
       onConvert(md);
     }, 0);

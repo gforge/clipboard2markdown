@@ -58,21 +58,23 @@ export default function Settings({ options, onChange }: Props) {
             </Typography>
           }
         />
+
         <FormControlLabel
           control={
             <Switch
-              checked={!!options.removeReferenceMarkers}
+              checked={!!options.stripBackslashEscapes}
               onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-                set({ removeReferenceMarkers: e.target.checked })
+                set({ stripBackslashEscapes: e.target.checked })
               }
             />
           }
           label={
             <Typography component="span" sx={{ fontFamily: 'Consolas, "Courier New", monospace' }}>
-              <code>Remove reference markers</code>
+              <code>Remove backslash escapes</code>
             </Typography>
           }
         />
+
       </FormGroup>
     </Paper>
   );

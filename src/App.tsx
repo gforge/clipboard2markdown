@@ -10,7 +10,7 @@ export default function App() {
   const [options, setOptions] = useState<ConvertOptions>({
     dashToHyphen: true,
     dropImages: true,
-    removeReferenceMarkers: true,
+    stripBackslashEscapes: false,
   });
   const outputRef = React.useRef<import('./components/Output').OutputHandle | null>(null);
 

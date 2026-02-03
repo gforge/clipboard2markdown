@@ -42,4 +42,19 @@ describe('convertHtmlToMarkdown', () => {
     expect(md).not.toContain('@page');
     expect(md).not.toContain('size');
   });
+
+  it('joins hyphenated line breaks and collapses soft line wraps into spaces', () => {
+    const raw = `Administrative demands in healthcare significantly contribute
+    to surging healthcare expenses, low job satisfaction, and ulti-
+    mately physician burnout [1]. Evidence suggests that doctors
+    spend an equivalent amount of time on administrative tasks,
+    such as drafting progress notes and discharge documents,
+    requesting labs and analyzing results, as they do in patient
+    interactions [2].`;
+    const html = `<p>${raw}</p>`;
+    const md: string = convert(html);
+    expect(md).toContain('ultimately physician burnout [1]');
+    expect(md).not.toContain('ulti-');
+    expect(md).not.toContain('\n');
+  });
 });

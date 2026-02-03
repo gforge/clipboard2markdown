@@ -6,7 +6,7 @@ export type ConvertOptions = {
   dashToHyphen?: boolean;
   pandocHeadings?: boolean; // convert #/## to underlined h1/h2
   gfm?: boolean;
-  removeReferenceMarkers?: boolean; // strip bracketed and superscript numeric references
+  stripBackslashEscapes?: boolean; // option: remove backslashes used to escape brackets/parentheses
 };
 
 function normalizePunctuation(md: string): string {
@@ -15,8 +15,15 @@ function normalizePunctuation(md: string): string {
     .replaceAll(/[\u201c\u201d\u2033]/g, '"')
     .replaceAll(/[\u2212\u2022\u00b7\u25aa]/g, '-')
     .replaceAll('\u2026', '...')
-    .replaceAll(/ +\n/g, '\n')
+    // Join hyphenated words split across lines ("ulti-\n\nmately" -> "ultimately")
+    .replaceAll(/([A-Za-z])\r?\n([A-Za-z])/g, '$1$2')
+    // Join hyphenated words split across lines ("ulti-\r?\n   mately" -> "ultimately")
+    .replaceAll(/-(?:[ \t]*\r?\n[ \t]*)/g, '')
+    // Collapse multiple newlines to paragraph breaks, then convert single newlines (soft wraps) to spaces
     .replaceAll(/\n{3,}/g, '\n\n')
+    // Replace single newlines with a space, but preserve newlines followed by an underline (=== or ---) or another newline
+    .replaceAll(/\n(?!\n|[=-]+\n)/g, ' ')
+    .replaceAll(/ +\n/g, '\n')
     .replaceAll(/ +$/gm, '')
     .trim();
 }
@@ -62,13 +69,7 @@ export function convertHtmlToMarkdown(html: string, options: ConvertOptions = {}
   // Superscript/subscript rules (mimic pandoc behavior)
   svc.addRule('sup', {
     filter: 'sup',
-    replacement: (content: string) => {
-      // If requested, treat numeric superscripts as reference markers and drop them
-      if (options.removeReferenceMarkers && /^\s*\d+(?:[\s,]*\d+)*\s*$/.test(content)) {
-        return '';
-      }
-      return `^${content}^`;
-    },
+    replacement: (content: string) => `^${content}^`,
   });
 
   svc.addRule('sub', {
@@ -120,16 +121,23 @@ export function convertHtmlToMarkdown(html: string, options: ConvertOptions = {}
   // Minimal punctuation normalization
   md = normalizePunctuation(md);
 
-  // Remove reference markers (e.g., [22], [1,2], and numeric superscripts converted to ^22^) if enabled
-  if (options.removeReferenceMarkers) {
-    // Remove bracketed numeric citations like [22], [1, 2], or escaped brackets like \[1, 2\]
-    md = md.replaceAll(/\s*\\?\[\s*\d+(?:[\s,]*\d+)*\s*\\?\]/g, '');
-    // Remove isolated numeric parenthetical citations like (22)
-    md = md.replaceAll(/\s*\(\s*\d+(?:[\s,]*\d+)*\s*\)/g, '');
-    // Remove numeric superscript markers converted as ^22^
-    md = md.replaceAll(/\^\d+(?:[\s,]*\d+)*\^/g, '');
-    // Trim any resulting extra whitespace/newlines
-    md = md.replaceAll(/\n{3,}/g, '\n\n').trim();
+  // General cleanup: normalize non-breaking spaces and tidy punctuation/spacing
+  md = md.replaceAll('\u00A0', ' ');
+  // Remove any spaces that appear before punctuation (e.g., "word ," -> "word,")
+  md = md.replaceAll(/\s+([,.;:!?])/g, '$1');
+  // Remove spaces left before newlines
+  md = md.replaceAll(/ +\n/g, '\n');
+  // Collapse multiple spaces into single spaces
+  md = md.replaceAll(/ {2,}/g, ' ');
+
+  // Normalize repeated newlines
+  md = md.replaceAll(/\n{3,}/g, '\n\n').trim();
+
+  // Optionally remove backslash escapes before brackets/parentheses (e.g. "\[1\]" -> "[1]")
+  if (options.stripBackslashEscapes) {
+    // only remove backslashes used to escape brackets and parentheses
+    // remove any number of backslashes immediately before bracket/paren
+    md = md.replaceAll(/\\+(?=[\u005B\u005D\u0028\u0029])/g, '');
   }
 
   // Remove any non-printable control characters introduced by pasted content, but keep common whitespace (\n, \r, \t)
