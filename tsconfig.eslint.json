@@ -1,0 +1,10 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "moduleResolution": "NodeNext",
+    "types": ["node"],
+    "lib": ["ES2022"]
+  },
+  "include": ["eslint.config.ts", "src", "test"],
+  "exclude": ["dist", "build", "coverage", "node_modules"]
+}

@@ -1,5 +1,4 @@
-clipboard2markdown
-==================
+# clipboard2markdown
 
 > Easily convert richly formatted text or HTML to
 > [Markdown](http://daringfireball.net/projects/markdown/syntax).
@@ -9,19 +8,13 @@ clipboard2markdown
 > [to-markdown](https://github.com/domchristie/to-markdown),
 > a Markdown converter running in the browser.
 
-Demo
-----
+## Demo
 
 ### Interactive
 
 <http://euangoddard.github.io/clipboard2markdown/>
 
-### Video
-
-![Screencast](screencast.gif)
-
-Usage
------
+## Usage
 
 Open [index.html](index.html) in a favorite browser and hit `Ctrl+C`
 (or `⌘+C` on Mac).
@@ -33,13 +26,12 @@ One can paste multiple times. This overwrites the previous conversion.
 
 ### Tested browsers
 
--   Chrome 33 (Linux and OS X)
--   Firefox 27 (Linux)
--   Safari 5 (OS X)
--   Internet Explorer 11 (Windows)
+- Chrome 33 (Linux and OS X)
+- Firefox 27 (Linux)
+- Safari 5 (OS X)
+- Internet Explorer 11 (Windows)
 
-About
------
+## About
 
 [clipboard2markdown](https://github.com/euangoddard/clipboard2markdown)
 was created by [Euan Goddard](https://github.com/euangoddard).
