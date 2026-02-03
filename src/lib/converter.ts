@@ -1,4 +1,5 @@
 import TurndownService from 'turndown';
+import { marked } from 'marked';
 import { sanitizeHtml } from './sanitizeHtml';
 import { normalizePunctuation } from './normalizePunctuation';
 import { dePdfCleanup } from './dePdfCleanup';
@@ -13,8 +14,10 @@ export type ConvertOptions = {
   dropBold?: boolean;
   dashToHyphen?: boolean;
   pandocHeadings?: boolean; // convert #/## to underlined h1/h2
+  headingsToBold?: boolean; // convert headings to bold/plain text (useful for some web forms)
   gfm?: boolean;
   dePdf?: boolean; // De-PDF: join hyphenation, collapse soft wraps, remove backslash escapes
+  output?: 'markdown' | 'clean'; // 'clean' returns sanitized HTML instead of Markdown
 };
 
 export function convertToMarkdown(
@@ -34,6 +37,18 @@ export function convertToMarkdown(
     md = md.replaceAll(/\p{Cc}/gu, (c: string) =>
       c === '\n' || c === '\r' || c === '\t' ? c : '',
     );
+
+    // If user requested 'clean' output, wrap paragraphs into minimal HTML
+    if (options.output === 'clean') {
+      const escapeHtml = (s: string) =>
+        s.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
+      const paragraphs = md
+        .split(/\n{2,}/)
+        .map((p) => `<p>${escapeHtml(p.trim())}</p>`)
+        .join('\n');
+      return paragraphs;
+    }
+
     return md;
   }
 
@@ -142,8 +157,26 @@ export function convertToMarkdown(
     md = ensureNumberedHeadingParagraphBreak(md);
   }
 
+  // Option: convert headings to bold/plain text (useful when pasting into form fields that don't like '#' headings)
+  if (options.headingsToBold) {
+    // Convert ATX headings like '# Title' to '**Title**' and ensure paragraph break after
+    md = md.replaceAll(/^[ \t]*#{1,6}\s+(.+?)\s*$/gm, (_m, p1) => `**${p1.trim()}**\n\n`);
+    // Convert underlined/pandoc-style headings and add paragraph break
+    md = md.replaceAll(/^(.*)\n=+$/gm, (_m, p1) => `**${p1.trim()}**\n\n`);
+    md = md.replaceAll(/^(.*)\n-+$/gm, (_m, p1) => `**${p1.trim()}**\n\n`);
+  }
+
   // Remove any non-printable control characters introduced by pasted content, but keep common whitespace (\n, \r, \t)
   md = md.replaceAll(/\p{Cc}/gu, (c) => (c === '\n' || c === '\r' || c === '\t' ? c : ''));
+
+  // If the user requested a clean HTML output, render the markdown back to HTML and strip attributes
+  if (options.output === 'clean') {
+    // Ensure we have a string result from marked (older/newer versions may return Promise/string)
+    const html = String(marked(md));
+    // Strip style/class/id/data-* attributes that could carry presentation info
+    const stripped = html.replaceAll(/\s+(?:style|class|id|data-[a-z0-9-]+)="[^"]*"/gi, '');
+    return stripped;
+  }
 
   return md;
 }

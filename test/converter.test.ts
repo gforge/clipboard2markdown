@@ -62,4 +62,35 @@ dddd`;
     const md = convert(rawText, 'HTML', {});
     expect(md).toBe(rawText);
   });
+
+  it('returns clean HTML when output=clean (strips style attributes)', () => {
+    const html = '<p style="color: red">Hello <strong>World</strong></p>';
+    const out = convert(html, 'HTML', { output: 'clean' });
+    expect(out).toContain('<p>');
+    expect(out).toContain('Hello');
+    expect(out).not.toContain('style="');
+  });
+
+  it('when output=clean respects dropImages by removing images', () => {
+    const html = '<p>Hi <img src="x.png" alt="x"> there</p>';
+    const out = convert(html, 'HTML', { output: 'clean', dropImages: true });
+    expect(out).toContain('Hi');
+    expect(out).toContain('there');
+    expect(out).not.toContain('<img');
+  });
+
+  it('converts headings to bold when headingsToBold is true (markdown)', () => {
+    const html = '<h1>Title</h1><p>text</p>';
+    const md = convert(html, 'HTML', { headingsToBold: true });
+    expect(md).toContain('**Title**');
+    expect(md).not.toContain('# Title');
+    expect(md.indexOf('**Title**') < md.indexOf('text')).toBe(true);
+  });
+
+  it('converts headings to bold and outputs clean HTML when output=clean', () => {
+    const html = '<h1>Title</h1><p>text</p>';
+    const out = convert(html, 'HTML', { headingsToBold: true, output: 'clean' });
+    expect(out.toLowerCase()).toContain('<p><strong>title</strong>');
+    expect(out.toLowerCase()).toContain('<p>text');
+  });
 });

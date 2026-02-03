@@ -1,5 +1,15 @@
 import React from 'react';
-import { FormGroup, FormControlLabel, Switch, Paper, Typography } from '@mui/material';
+import {
+  FormGroup,
+  FormControlLabel,
+  Switch,
+  Paper,
+  Typography,
+  RadioGroup,
+  Radio,
+  FormControl,
+  FormLabel,
+} from '@mui/material';
 import type { ConvertOptions } from '../lib/converter';
 
 type Props = Readonly<{ options: ConvertOptions; onChange: (opts: ConvertOptions) => void }>;
@@ -74,7 +84,57 @@ export default function Settings({ options, onChange }: Props) {
             </Typography>
           }
         />
+
+        <FormControlLabel
+          control={
+            <Switch
+              checked={!!options.headingsToBold}
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                set({ headingsToBold: e.target.checked })
+              }
+            />
+          }
+          label={
+            <Typography component="span" sx={{ fontFamily: 'Consolas, "Courier New", monospace' }}>
+              <code>Convert headings to bold</code>
+            </Typography>
+          }
+        />
       </FormGroup>
+
+      <FormControl component="fieldset" sx={{ mt: 1 }}>
+        <FormLabel component="legend">Output</FormLabel>
+        <RadioGroup
+          row
+          value={options.output ?? 'markdown'}
+          onChange={(e) => set({ output: e.target.value as 'markdown' | 'clean' })}
+        >
+          <FormControlLabel
+            value="markdown"
+            control={<Radio />}
+            label={
+              <Typography
+                component="span"
+                sx={{ fontFamily: 'Consolas, "Courier New", monospace' }}
+              >
+                <code>Markdown</code>
+              </Typography>
+            }
+          />
+          <FormControlLabel
+            value="clean"
+            control={<Radio />}
+            label={
+              <Typography
+                component="span"
+                sx={{ fontFamily: 'Consolas, "Courier New", monospace' }}
+              >
+                <code>Clean HTML</code>
+              </Typography>
+            }
+          />
+        </RadioGroup>
+      </FormControl>
     </Paper>
   );
 }

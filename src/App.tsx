@@ -11,6 +11,7 @@ export default function App() {
     dashToHyphen: true,
     dropImages: true,
     dePdf: false,
+    output: 'markdown',
   });
   const outputRef = React.useRef<import('./components/Output').OutputHandle | null>(null);
 
@@ -44,7 +45,7 @@ export default function App() {
           options={options}
           activeWhenEmpty={markdown.trim() === ''}
         />
-        <Output ref={outputRef} value={markdown} />
+        <Output ref={outputRef} value={markdown} output={options.output} />
       </Box>
     </Container>
   );

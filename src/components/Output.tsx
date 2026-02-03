@@ -2,15 +2,20 @@ import React, { useRef, useState, useImperativeHandle, forwardRef } from 'react'
 import { Paper, TextField, Button, Box, Typography } from '@mui/material';
 import { useTheme } from '@mui/material/styles';
 
-type Props = Readonly<{ value?: string }>;
+type Props = Readonly<{ value?: string; output?: 'markdown' | 'clean'; onClear?: () => void }>;
 
 export type OutputHandle = {
   insert: (text: string) => void;
   getValue: () => string;
+  clear: () => void;
 };
 
-const Output = forwardRef<OutputHandle, Props>(function Output({ value = '' }: Props, ref) {
+const Output = forwardRef<OutputHandle, Props>(function Output(
+  { value = '', output = 'markdown', onClear }: Props,
+  ref,
+) {
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+  const cleanBoxRef = useRef<HTMLDivElement | null>(null);
   const [content, setContent] = useState<string>(value);
   const [focused, setFocused] = useState<boolean>(false);
 
@@ -43,6 +48,18 @@ const Output = forwardRef<OutputHandle, Props>(function Output({ value = '' }: P
   useImperativeHandle(ref, () => ({
     insert: insertAtCursor,
     getValue: () => content,
+    clear: () => {
+      setContent('');
+      // Focus the clean box if present, otherwise focus the textarea
+      const el = textareaRef.current as HTMLTextAreaElement | null;
+      if (el) {
+        el.focus();
+        el.setSelectionRange(0, 0);
+      } else {
+        cleanBoxRef.current?.focus();
+      }
+      onClear?.();
+    },
   }));
 
   const copy = async () => {
@@ -61,6 +78,18 @@ const Output = forwardRef<OutputHandle, Props>(function Output({ value = '' }: P
         console.error('Copy failed', err);
       }
     }
+  };
+
+  const clearContent = () => {
+    setContent('');
+    const el = textareaRef.current as HTMLTextAreaElement | null;
+    if (el) {
+      el.focus();
+      el.setSelectionRange(0, 0);
+    } else {
+      cleanBoxRef.current?.focus();
+    }
+    onClear?.();
   };
 
   const showHelp = !focused && content.trim() === '';
@@ -121,20 +150,53 @@ const Output = forwardRef<OutputHandle, Props>(function Output({ value = '' }: P
         </Box>
       ) : (
         <>
-          <TextField
-            inputRef={textareaRef}
-            value={content}
-            onChange={(e) => setContent(e.target.value)}
-            onFocus={() => setFocused(true)}
-            onBlur={() => setFocused(false)}
-            multiline
-            minRows={12}
-            fullWidth
-            variant="outlined"
-          />
+          {output === 'clean' ? (
+            <Box
+              ref={cleanBoxRef}
+              sx={{
+                border: '1px solid rgba(0,0,0,0.23)',
+                borderRadius: 1,
+                p: 2,
+                minHeight: '12em',
+                overflow: 'auto',
+                '&:focus': {
+                  outline: 'none',
+                  boxShadow: (theme) => `0 0 0 2px ${theme.palette.action.focus}`,
+                },
+              }}
+              tabIndex={0}
+              onFocus={() => setFocused(true)}
+              onBlur={() => setFocused(false)}
+              dangerouslySetInnerHTML={{ __html: content }}
+            />
+          ) : (
+            <TextField
+              inputRef={textareaRef}
+              value={content}
+              onChange={(e) => setContent(e.target.value)}
+              onFocus={() => setFocused(true)}
+              onBlur={() => setFocused(false)}
+              multiline
+              minRows={12}
+              fullWidth
+              variant="outlined"
+            />
+          )}
+
           <Button sx={{ mt: 1 }} variant="contained" onClick={copy}>
             Copy
           </Button>
+
+          {output === 'clean' && (
+            <Button
+              sx={{ mt: 1, ml: 1 }}
+              variant="outlined"
+              color="secondary"
+              onClick={clearContent}
+            >
+              Clear
+            </Button>
+          )}
         </>
       )}
     </Paper>
