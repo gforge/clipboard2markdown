@@ -1,6 +1,6 @@
 import React, { useRef, useState, useImperativeHandle, forwardRef } from 'react';
 import { Paper, TextField, Button, Box, Typography } from '@mui/material';
-import bg from '../assets/background.svg';
+import { useTheme } from '@mui/material/styles';
 
 type Props = Readonly<{ value?: string }>;
 
@@ -65,8 +65,29 @@ const Output = forwardRef<OutputHandle, Props>(function Output({ value = '' }: P
 
   const showHelp = !focused && content.trim() === '';
 
+  // Use images from the `public/` folder so bundling doesn't inline raw SVG markup.
+  // Add `public/images/background-light.svg` and `public/images/background-dark.svg` and they will be
+  // served at `/images/background-light.svg` and `/images/background-dark.svg` respectively.
+  const theme = useTheme();
+  const mode = (theme?.palette?.mode as 'light' | 'dark') ?? 'light';
+  // Respect Vite's base (set from package.json 'homepage' or VITE_BASE) so paths work in dev & production
+  const base = (import.meta as unknown as { env?: { BASE_URL?: string } }).env?.BASE_URL ?? '/';
+  const bgUrl = `${base}images/background-${mode}.svg`;
+  const bgImage = `url(${bgUrl})`;
+
   return (
-    <Paper className="docPaper" sx={{ flex: 1, p: 2, position: 'relative' }}>
+    <Paper
+      className="docPaper"
+      sx={{
+        flex: 1,
+        p: 2,
+        position: 'relative',
+        backgroundImage: bgImage,
+        backgroundRepeat: 'no-repeat',
+        backgroundPosition: 'right calc(100% - 10px)',
+        backgroundSize: '220px',
+      }}
+    >
       {/* When empty show the original instruction UI, hide the textarea until first content */}
       {showHelp ? (
         <Box sx={{ p: 2 }}>

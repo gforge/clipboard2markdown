@@ -14,7 +14,7 @@ export default function App() {
   });
   const outputRef = React.useRef<import('./components/Output').OutputHandle | null>(null);
 
-  const handleConvert = (md: string) => {
+  const appendOrInsertMarkdown = (md: string) => {
     // Insert converted markdown into the output at the current caret position
     const out = outputRef.current;
     if (out && typeof out.insert === 'function') {
@@ -40,7 +40,7 @@ export default function App() {
 
       <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 2 }}>
         <PasteArea
-          onConvert={handleConvert}
+          saveText={appendOrInsertMarkdown}
           options={options}
           activeWhenEmpty={markdown.trim() === ''}
         />

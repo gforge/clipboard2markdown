@@ -1,4 +1,12 @@
 import TurndownService from 'turndown';
+import { sanitizeHtml } from './sanitizeHtml';
+import { normalizePunctuation } from './normalizePunctuation';
+import { dePdfCleanup } from './dePdfCleanup';
+import {
+  preferOriginalH1Heading,
+  toPandocHeadings,
+  ensureNumberedHeadingParagraphBreak,
+} from './headingUtils';
 
 export type ConvertOptions = {
   dropImages?: boolean;
@@ -9,57 +17,56 @@ export type ConvertOptions = {
   dePdf?: boolean; // De-PDF: join hyphenation, collapse soft wraps, remove backslash escapes
 };
 
-function normalizePunctuation(md: string): string {
-  return (
-    md
-      .replaceAll(/[\u2018\u2019\u00b4]/g, "'")
-      .replaceAll(/[\u201c\u201d\u2033]/g, '"')
-      .replaceAll(/[\u2212\u2022\u00b7\u25aa]/g, '-')
-      .replaceAll('\u2026', '...')
-      // Normalize CRLF to LF
-      .replaceAll(/\r\n?/g, '\n')
-      // Unescape escaped leading '#' (Turndown may escape hashes inside paragraphs) so we can detect headings
-      .replaceAll(/(^|\n)\\#\s+/g, '$1# ')
-      // Ensure headings are surrounded by blank lines so they remain intact in Markdown
-      .replaceAll(/([^\n])\n(#{1,6}\s+)/g, '$1\n\n$2')
-      .replaceAll(/(#{1,6}[^\n]+)\n(?!\n)/g, '$1\n\n')
-      // Join letter fragments split across lines with safer rules:
-      // - lowercase -> uppercase: likely sentence boundary, replace with space
-      .replaceAll(/([a-z])(?:[ \t]*\n[ \t]*)+([A-Z])/g, '$1 $2')
-      // - letter -> lowercase: likely mid-word split, join without space
-      .replaceAll(/([A-Za-z])(?:[ \t]*\n[ \t]*)+([a-z])/g, '$1$2')
-      // - uppercase -> uppercase: treat as word boundary, keep a space
-      .replaceAll(/([A-Z])(?:[ \t]*\n[ \t]*)+([A-Z])/g, '$1 $2')
+export function convertToMarkdown(
+  raw: string,
+  type: 'PDF' | 'HTML',
+  options: ConvertOptions = {},
+): string {
+  if (type === 'PDF') {
+    // For PDF text, apply dePdf cleanup and minimal normalization
+    let md = dePdfCleanup(raw);
+    md = normalizePunctuation(md);
+    // Dash normalization
+    if (options.dashToHyphen) {
+      md = md.replaceAll(/[\u2013\u2014]/g, '-');
+    }
+    // Remove control characters
+    md = md.replaceAll(/\p{Cc}/gu, (c: string) =>
+      c === '\n' || c === '\r' || c === '\t' ? c : '',
+    );
+    return md;
+  }
 
-      // Collapse multiple newlines to paragraph breaks
-      .replaceAll(/\n{3,}/g, '\n\n')
+  // For HTML, proceed with Turndown conversion
+  // Fast-path: if no options and looks like Markdown, return as-is
+  const hasHtmlTags = /<[^>]+>/.test(raw);
+  const looksLikeMarkdown = /^(?:\s*#{1,6}\s+|\s*>\s+|^\s*```)/m.test(raw);
+  const noOptionsSet =
+    !options.dropImages &&
+    !options.dropBold &&
+    !options.dashToHyphen &&
+    !options.pandocHeadings &&
+    !options.gfm;
+  if (!hasHtmlTags && looksLikeMarkdown && noOptionsSet) {
+    return raw;
+  }
 
-      .replaceAll(/ +\n/g, '\n')
-      .replaceAll(/ +$/gm, '')
-      .trim()
-  );
-}
-
-export function convertHtmlToMarkdown(html: string, options: ConvertOptions = {}): string {
-  // Remove MS Word / Office cruft and style blocks commonly pasted into the top of documents
-  const sanitizeHtml = (input: string = '') => {
-    // Remove <head> blocks, styles, xml blocks and comments
-    let s = input;
-    s = s.replaceAll(/<head[\s\S]*?>[\s\S]*?<\/head>/gi, '');
-    s = s.replaceAll(/<style[\s\S]*?>[\s\S]*?<\/style>/gi, '');
-    s = s.replaceAll(/<meta[\s\S]*?>/gi, '');
-    s = s.replaceAll(/<link[\s\S]*?>/gi, '');
-    s = s.replaceAll(/<xml[\s\S]*?>[\s\S]*?<\/xml>/gi, '');
-    s = s.replaceAll(/<!--([\s\S]*?)-->/g, '');
-    // Remove stray @page or CSS rules if present as text nodes
-    s = s.replaceAll(/@page[\s\S]*?\}/gi, '');
-    // Remove inline style attributes that often carry MS Office artifacts
-    s = s.replaceAll(/\sstyle="[^"]*"/gi, '');
-    // Remove Microsoft-specific tags like <o:p>
-    s = s.replaceAll(/<o:p>[\s\S]*?<\/o:p>/gi, '');
-    // Trim leading/trailing whitespace
-    return s.trim();
-  };
+  // Additional fast-path: if HTML is simple (just <p> tags), unwrap and check if it looks like Markdown
+  if (hasHtmlTags && noOptionsSet) {
+    const simpleHtml = /^(<p[^>]*>[\s\S]*?<\/p>\s*)+$/i.test(raw.trim());
+    if (simpleHtml) {
+      const unwrapped = raw
+        .replaceAll(/<p[^>]*>/gi, '')
+        .replaceAll(/<\/p>/gi, '\n\n')
+        .replaceAll('&amp;', '&')
+        .replaceAll('&lt;', '<')
+        .replaceAll('&gt;', '>')
+        .trim();
+      if (/^(?:\s*#{1,6}\s+|\s*>\s+|^\s*```)/m.test(unwrapped)) {
+        return unwrapped;
+      }
+    }
+  }
 
   type TurndownLike = {
     addRule: (
@@ -108,44 +115,16 @@ export function convertHtmlToMarkdown(html: string, options: ConvertOptions = {}
   // Keep default image behavior otherwise (Turndown default will emit ![alt](src))
 
   // Sanitize incoming HTML to remove top-of-document style cruft
-  const cleaned = sanitizeHtml(html);
+  const cleaned = sanitizeHtml(raw);
   let md = svc.turndown(cleaned || '');
 
-  // If the original HTML contained heading tags, prefer the original heading text for those headings
-  const hadHeadingTags = /<h[1-6]\b/i.test(cleaned);
-  if (hadHeadingTags) {
-    const decodeHtml = (s: string) =>
-      s
-        .replaceAll(/<[^>]+>/g, '')
-        .replaceAll(/&nbsp;/gi, ' ')
-        .replaceAll(/&ndash;/gi, '-')
-        .replaceAll(/&mdash;/gi, '-')
-        .replaceAll(/&amp;/gi, '&')
-        .replaceAll(/&lt;/gi, '<')
-        .replaceAll(/&gt;/gi, '>')
-        .replaceAll(/\s+/g, ' ')
-        .trim();
-
-    // Replace the first converted ATX heading with the original <h1> text if present
-    const h1m = /<h1[^>]*>([\s\S]*?)<\/h1>/i.exec(cleaned);
-    if (h1m && h1m[1]) {
-      const h1text = decodeHtml(h1m[1]);
-      md = md.replace(/^(#+)\s.*$/m, (line, hashes) => `${hashes} ${h1text}`);
-    }
-  }
+  // Prefer original heading text (conservative) when source HTML contained heading tags
+  // This avoids Turndown/newline heuristics splitting a heading across the following paragraph.
+  md = preferOriginalH1Heading(cleaned, md);
 
   // Optional: convert ATX headings to Pandoc-style underlines for h1 and h2
   if (options.pandocHeadings) {
-    // h2 (## ) -> underline with '-'
-    md = md.replaceAll(
-      /^\s*##\s+(.+)$/gm,
-      (_match: string, title: string) => `\n\n${title}\n${'-'.repeat(title.length)}\n\n`,
-    );
-    // h1 (# ) -> underline with '='
-    md = md.replaceAll(
-      /^\s*#\s+(.+)$/gm,
-      (_match: string, title: string) => `\n\n${title}\n${'='.repeat(title.length)}\n\n`,
-    );
+    md = toPandocHeadings(md);
   }
 
   // Dash normalization: convert en/em dash to single hyphen
@@ -153,49 +132,14 @@ export function convertHtmlToMarkdown(html: string, options: ConvertOptions = {}
     md = md.replaceAll(/[\u2013\u2014]/g, '-');
   }
 
-  // Minimal punctuation normalization
+  // Minimal punctuation/whitespace normalization
   md = normalizePunctuation(md);
-  // If a numbered section heading (e.g. "# 3.Title") ends up inline with content, insert a paragraph break
-  // between the heading and the following paragraph (handles tag-less concatenations from some paste sources).
-  md = md.replaceAll(/(^|\n)(#\s*\d+\.[^\n]*?)\s+([A-Z][A-Za-z0-9])/g, '$1$2\n\n$3');
 
-  // General cleanup: normalize non-breaking spaces and tidy punctuation/spacing
-  md = md.replaceAll('\u00A0', ' ');
-  // Remove any spaces that appear before punctuation (e.g., "word ," -> "word,")
-  md = md.replaceAll(/\s+([,.;:!?])/g, '$1');
-  // Remove spaces left before newlines
-  md = md.replaceAll(/ +\n/g, '\n');
-  // Collapse multiple spaces into single spaces
-  md = md.replaceAll(/ {2,}/g, ' ');
-
-  // Normalize repeated newlines
-  md = md.replaceAll(/\n{3,}/g, '\n\n').trim();
-
-  // De-PDF: optional PDF clean-up suite — join hyphenated words, collapse soft wraps, and remove backslash-escapes
-  const dePdfCleanup = (s: string) =>
-    s
-      // Normalize CRLF to LF
-      .replaceAll(/\r\n?/g, '\n')
-      // Join letter fragments split across lines ("expens\n    es" -> "expenses")
-      .replaceAll(/([A-Za-z])(?:[ \t]*\n[ \t]*)+([A-Za-z])/g, '$1$2')
-      // Join hyphenated words split across lines ("ulti-\n   mately" -> "ultimately")
-      .replaceAll(/-(?:[ \t]*\n[ \t]*)+/g, '')
-      // Remove dangling hyphen + space that can remain after soft wrapping ("ulti- mately" -> "ultimately")
-      .replaceAll(/([A-Za-z])-\s+([A-Za-z])/g, '$1$2')
-      // Replace single newlines (possibly surrounded by spaces/tabs) with a space, but preserve newlines followed by an underline (=== or ---) or another newline
-      .replaceAll(/[ \t]*\n(?!\n|[=-]+\n)[ \t]*/g, ' ')
-      // Remove runs of backslashes immediately before bracket/paren ("\\\[1\\\]" -> "[1]")
-      .replaceAll(/\\+(?=[\u005B\u005D\u0028\u0029])/g, '')
-      // Collapse multiple spaces/newlines and trim
-      .replaceAll(/ {2,}/g, ' ')
-      .replaceAll(/\n{3,}/g, '\n\n')
-      .trim();
-
-  // Backwards-compat: accept older `stripBackslashEscapes` option by treating it as `dePdf`
-  const legacyStrip = (options as unknown as { stripBackslashEscapes?: boolean })
-    .stripBackslashEscapes;
-  if (options.dePdf || legacyStrip) {
-    md = dePdfCleanup(md);
+  // Ensure numbered headings separated from following paragraph
+  // Only apply this when the source HTML did NOT contain heading tags (tag-less concatenations)
+  const hadHeadingTags = /<h[1-6]\b/i.test(cleaned);
+  if (!hadHeadingTags) {
+    md = ensureNumberedHeadingParagraphBreak(md);
   }
 
   // Remove any non-printable control characters introduced by pasted content, but keep common whitespace (\n, \r, \t)
@@ -204,4 +148,4 @@ export function convertHtmlToMarkdown(html: string, options: ConvertOptions = {}
   return md;
 }
 
-export default convertHtmlToMarkdown;
+export default convertToMarkdown;

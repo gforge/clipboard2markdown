@@ -1,15 +1,20 @@
 import React, { useRef, useEffect } from 'react';
 import { Paper } from '@mui/material';
-import convertHtmlToMarkdown from '../lib/converter';
+import convertToMarkdown from '../lib/converter';
 import type { ConvertOptions } from '../lib/converter';
 
 type Props = Readonly<{
-  onConvert: (markdown: string) => void;
+  saveText: (text: string) => void;
   options?: ConvertOptions;
   activeWhenEmpty?: boolean;
 }>;
 
-export default function PasteArea({ onConvert, options = {}, activeWhenEmpty = true }: Props) {
+const looksPdfLike = (text: string): boolean => {
+  // Check for common PDF artifacts: soft hyphens, non-breaking spaces, etc.
+  return /[\u00AD\u00A0]/.test(text);
+};
+
+export default function PasteArea({ saveText, options = {}, activeWhenEmpty = true }: Props) {
   const ref = useRef<HTMLTextAreaElement | null>(null);
 
   const focusPaste = () => ref.current?.focus();
@@ -20,30 +25,42 @@ export default function PasteArea({ onConvert, options = {}, activeWhenEmpty = t
     const htmlFromClipboard = e.clipboardData?.getData('text/html');
     const textFromClipboard = e.clipboardData?.getData('text/plain');
 
+    const processNonHtmlTextAndConvert = (text?: string): boolean => {
+      if (!text) return false;
+
+      if (text.trim() === '') return false;
+
+      if (options.dePdf === true || looksPdfLike(text)) {
+        const md = convertToMarkdown(text, 'PDF', options);
+        saveText(md);
+        return true;
+      }
+
+      // Keep as is
+      saveText(text);
+      return true;
+    };
+
     if (htmlFromClipboard) {
-      const md = convertHtmlToMarkdown(htmlFromClipboard, options);
-      onConvert(md);
+      const md = convertToMarkdown(htmlFromClipboard, 'HTML', options);
+      saveText(md);
       return;
     }
 
     if (textFromClipboard) {
-      const md = convertHtmlToMarkdown(`<p>${escapeHtml(textFromClipboard)}</p>`, options);
-      onConvert(md);
-      return;
+      if (processNonHtmlTextAndConvert(textFromClipboard)) return;
     }
 
     // Try to extract string data from DataTransfer items (covers some PDF viewers / RTF)
     const items = e.clipboardData?.items;
     if (items && items.length) {
-      for (const it of items) {
+      for (const it of Array.from(items)) {
         if (it.kind === 'string' && it.type.startsWith('text/')) {
           const text = await new Promise<string | null>((resolve) => {
-            it.getAsString((s) => resolve(s ?? null));
+            it.getAsString((s: string | null) => resolve(s ?? null));
           });
           if (text) {
-            const md = convertHtmlToMarkdown(`<p>${escapeHtml(text)}</p>`, options);
-            onConvert(md);
-            return;
+            if (processNonHtmlTextAndConvert(text)) return;
           }
         }
       }
@@ -54,8 +71,7 @@ export default function PasteArea({ onConvert, options = {}, activeWhenEmpty = t
       .readText()
       .then((txt) => {
         if (txt) {
-          const md = convertHtmlToMarkdown(`<p>${escapeHtml(txt)}</p>`, options);
-          onConvert(md);
+          processNonHtmlTextAndConvert(txt);
         }
       })
       .catch(() => {
@@ -65,13 +81,9 @@ export default function PasteArea({ onConvert, options = {}, activeWhenEmpty = t
     // Final fallback: use the hidden textarea's value (older browsers)
     setTimeout(() => {
       const text = ref.current?.value ?? '';
-      const md = convertHtmlToMarkdown(`<p>${escapeHtml(text)}</p>`, options);
-      onConvert(md);
+      processNonHtmlTextAndConvert(text);
     }, 0);
   };
-
-  const escapeHtml = (s: string) =>
-    s.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
 
   // Listen for global paste and focus hidden paste target when active
   useEffect(() => {
