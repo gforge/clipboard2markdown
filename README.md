@@ -14,6 +14,28 @@
 
 <http://euangoddard.github.io/clipboard2markdown/>
 
+## Deployment ✅
+
+You can host this app on GitHub Pages. This repository is preconfigured to publish to `https://gforge.github.io/clipboard2markdown/` (the `homepage` field is set in `package.json`). Two supported options are shown below.
+
+1. Manual (npm + gh-pages)
+
+- Install the `gh-pages` dev dependency and run the deploy scripts:
+
+```bash
+npm install --save-dev gh-pages
+npm run predeploy
+npm run deploy
+```
+
+- If you plan to serve from a subpath (e.g. `https://<your-username>.github.io/<repo-name>/`), add a `homepage` field to `package.json` with that URL or set a `VITE_BASE` (or `BASE`) variable in your CI to point to the repository subpath.
+
+2. Automatic (GitHub Actions)
+
+- A GitHub Actions workflow (added at `.github/workflows/deploy.yml`) will build and publish the `dist/` directory to the `gh-pages` branch when changes are pushed to `main`.
+
+> Note: The action uses `GITHUB_TOKEN` so no extra secrets are required. If you need a custom base path, set a `homepage` in `package.json` or provide `VITE_BASE` in your workflow.
+
 ## Usage
 
 Open [index.html](index.html) in a favorite browser and hit `Ctrl+C`

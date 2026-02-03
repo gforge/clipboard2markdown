@@ -1,6 +1,7 @@
 {
   "name": "clipboard2markdown",
-  "version": "0.0.0",
+  "version": "1.0.0",
+  "homepage": "https://gforge.github.io/clipboard2markdown/",
   "private": true,
   "type": "module",
   "scripts": {
@@ -12,23 +13,24 @@
     "typecheck": "tsc --noEmit",
     "lint": "eslint 'src/**/*.{ts,tsx,js,jsx}'",
     "lint:fix": "eslint --fix 'src/**/*.{ts,tsx,js,jsx}'",
+    "predeploy": "npm run build",
+    "deploy": "gh-pages -d dist",
     "upgrade-deps": "npx npm-check-updates -i && npm install"
   },
   "dependencies": {
+    "@emotion/react": "^11.11.0",
+    "@emotion/styled": "^11.11.0",
+    "@mui/icons-material": "^5.13.0",
+    "@mui/material": "^5.13.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
-    "turndown": "^7.2.2",
-    "@mui/material": "^5.13.0",
-    "@mui/icons-material": "^5.13.0",
-    "@emotion/react": "^11.11.0",
-    "@emotion/styled": "^11.11.0"
+    "turndown": "^7.2.2"
   },
   "devDependencies": {
-    "vite": "^5.1.0",
-    "@types/react": "^18.2.21",
-    "@types/react-dom": "^18.2.7",
     "@testing-library/react": "^14.0.0",
     "@types/node": "^24.1.0",
+    "@types/react": "^18.2.21",
+    "@types/react-dom": "^18.2.7",
     "@types/turndown": "^5.0.6",
     "@typescript-eslint/eslint-plugin": "^8.54.0",
     "@typescript-eslint/parser": "^8.54.0",
@@ -38,11 +40,13 @@
     "eslint-plugin-prettier": "^5.5.5",
     "eslint-plugin-react": "^7.37.5",
     "eslint-plugin-react-hooks": "^7.0.1",
+    "gh-pages": "^6.3.0",
     "jiti": "^2.6.1",
     "npm-check-updates": "^19.3.2",
     "prettier": "^3.8.1",
     "typescript": "^5.9.3",
     "typescript-eslint": "^8.54.0",
+    "vite": "^5.1.0",
     "vitest": "^4.0.18"
   }
 }
