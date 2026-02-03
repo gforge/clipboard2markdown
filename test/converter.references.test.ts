@@ -58,7 +58,7 @@ describe('reference handling and sanitization', () => {
     // Turndown may escape brackets with one or more backslashes; accept either
     expect(mdDefault).toMatch(/\\+\[1\\+\]/);
 
-    const mdStripped = convertHtmlToMarkdown(html, { stripBackslashEscapes: true });
+    const mdStripped = convertHtmlToMarkdown(html, { dePdf: true });
     expect(mdStripped).toContain('[1]');
     // no backslashes should remain around that citation
     expect(mdStripped).not.toMatch(/\\/);

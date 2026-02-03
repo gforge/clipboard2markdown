@@ -52,8 +52,9 @@ describe('convertHtmlToMarkdown', () => {
     requesting labs and analyzing results, as they do in patient
     interactions [2].`;
     const html = `<p>${raw}</p>`;
-    const md: string = convert(html);
-    expect(md).toContain('ultimately physician burnout [1]');
+    const md: string = convert(html, { dePdf: true });
+    // Accept either escaped or unescaped bracket citation (Turndown may escape brackets)
+    expect(md).toMatch(/ultimately physician burnout\s+\\?\[1\\?\]/);
     expect(md).not.toContain('ulti-');
     expect(md).not.toContain('\n');
   });

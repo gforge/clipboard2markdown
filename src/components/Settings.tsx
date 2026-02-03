@@ -62,19 +62,18 @@ export default function Settings({ options, onChange }: Props) {
         <FormControlLabel
           control={
             <Switch
-              checked={!!options.stripBackslashEscapes}
+              checked={!!options.dePdf}
               onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-                set({ stripBackslashEscapes: e.target.checked })
+                set({ dePdf: e.target.checked })
               }
             />
           }
           label={
             <Typography component="span" sx={{ fontFamily: 'Consolas, "Courier New", monospace' }}>
-              <code>Remove backslash escapes</code>
+              <code>De-PDF: join soft wraps, fix hyphenation, strip escapes</code>
             </Typography>
           }
         />
-
       </FormGroup>
     </Paper>
   );

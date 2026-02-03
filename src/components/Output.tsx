@@ -1,5 +1,6 @@
 import React, { useRef, useState, useImperativeHandle, forwardRef } from 'react';
 import { Paper, TextField, Button, Box, Typography } from '@mui/material';
+import bg from '../assets/background.svg';
 
 type Props = Readonly<{ value?: string }>;
 
