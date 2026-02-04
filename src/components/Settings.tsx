@@ -5,17 +5,18 @@ import {
   Switch,
   Paper,
   Typography,
+  Tooltip,
   RadioGroup,
   Radio,
   FormControl,
   FormLabel,
 } from '@mui/material';
-import type { ConvertOptions } from '../lib/converter';
+import { useStore } from '../store/useStore';
 
-type Props = Readonly<{ options: ConvertOptions; onChange: (opts: ConvertOptions) => void }>;
-
-export default function Settings({ options, onChange }: Props) {
-  const set = (patch: Partial<ConvertOptions>) => onChange({ ...options, ...patch });
+export default function Settings() {
+  const options = useStore((s) => s.options);
+  const setOptions = useStore((s) => s.setOptions);
+  const set = (patch: Partial<import('../lib/converter').ConvertOptions>) => setOptions(patch);
 
   return (
     <Paper
@@ -33,9 +34,14 @@ export default function Settings({ options, onChange }: Props) {
             />
           }
           label={
-            <Typography component="span" sx={{ fontFamily: 'Consolas, "Courier New", monospace' }}>
-              <code>Drop images</code>
-            </Typography>
+            <Tooltip title="Remove images from output and avoid embedding image markdown" arrow>
+              <Typography
+                component="span"
+                sx={{ fontFamily: 'Consolas, "Courier New", monospace' }}
+              >
+                <code>Drop images</code>
+              </Typography>
+            </Tooltip>
           }
         />
         <FormControlLabel
@@ -48,24 +54,82 @@ export default function Settings({ options, onChange }: Props) {
             />
           }
           label={
-            <Typography component="span" sx={{ fontFamily: 'Consolas, "Courier New", monospace' }}>
-              <code>Drop bold</code>
-            </Typography>
+            <Tooltip title="Strip bold/strong formatting but keep the text" arrow>
+              <Typography
+                component="span"
+                sx={{ fontFamily: 'Consolas, "Courier New", monospace' }}
+              >
+                <code>Drop bold</code>
+              </Typography>
+            </Tooltip>
+          }
+        />
+
+        <FormControlLabel
+          control={
+            <Switch
+              checked={!!options.dropItalic}
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                set({ dropItalic: e.target.checked })
+              }
+            />
+          }
+          label={
+            <Tooltip
+              title="Strip italics/emphasis formatting (*, _, <em>/<i>) but keep the text"
+              arrow
+            >
+              <Typography
+                component="span"
+                sx={{ fontFamily: 'Consolas, "Courier New", monospace' }}
+              >
+                <code>Drop italics</code>
+              </Typography>
+            </Tooltip>
+          }
+        />
+
+        <FormControlLabel
+          control={
+            <Switch
+              checked={!!options.dropCode}
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                set({ dropCode: e.target.checked })
+              }
+            />
+          }
+          label={
+            <Tooltip
+              title="Strip code formatting (inline backticks and fenced blocks) but keep the content"
+              arrow
+            >
+              <Typography
+                component="span"
+                sx={{ fontFamily: 'Consolas, "Courier New", monospace' }}
+              >
+                <code>Drop code</code>
+              </Typography>
+            </Tooltip>
           }
         />
         <FormControlLabel
           control={
             <Switch
-              checked={!!options.dashToHyphen}
+              checked={!!options.normalizePunctuation}
               onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-                set({ dashToHyphen: e.target.checked })
+                set({ normalizePunctuation: e.target.checked })
               }
             />
           }
           label={
-            <Typography component="span" sx={{ fontFamily: 'Consolas, "Courier New", monospace' }}>
-              <code>Convert em-dash to -</code>
-            </Typography>
+            <Tooltip title="Replace smart punctuation (— “ ” ’ …) with ASCII" arrow>
+              <Typography
+                component="span"
+                sx={{ fontFamily: 'Consolas, "Courier New", monospace' }}
+              >
+                <code>Normalize punctuation</code>
+              </Typography>
+            </Tooltip>
           }
         />
 
@@ -79,9 +143,17 @@ export default function Settings({ options, onChange }: Props) {
             />
           }
           label={
-            <Typography component="span" sx={{ fontFamily: 'Consolas, "Courier New", monospace' }}>
-              <code>De-PDF: join soft wraps, fix hyphenation, strip escapes</code>
-            </Typography>
+            <Tooltip
+              title="Join soft wraps, fix hyphenation, strip backslash escapes from PDFs"
+              arrow
+            >
+              <Typography
+                component="span"
+                sx={{ fontFamily: 'Consolas, "Courier New", monospace' }}
+              >
+                <code>De-PDF</code>
+              </Typography>
+            </Tooltip>
           }
         />
 
@@ -95,9 +167,17 @@ export default function Settings({ options, onChange }: Props) {
             />
           }
           label={
-            <Typography component="span" sx={{ fontFamily: 'Consolas, "Courier New", monospace' }}>
-              <code>Convert headings to bold</code>
-            </Typography>
+            <Tooltip
+              title="Convert headings to bold text (useful when pasting into rich form fields that then convert to poor PDFs)"
+              arrow
+            >
+              <Typography
+                component="span"
+                sx={{ fontFamily: 'Consolas, "Courier New", monospace' }}
+              >
+                <code>Headings to bold</code>
+              </Typography>
+            </Tooltip>
           }
         />
       </FormGroup>

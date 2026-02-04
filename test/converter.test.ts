@@ -25,10 +25,27 @@ describe('convertHtmlToMarkdown', () => {
     expect(md).not.toContain('**');
   });
 
-  it('normalizes em/en-dash to hyphen when dashToHyphen is true', () => {
+  it('normalizes em/en-dash to hyphen when normalizePunctuation is true', () => {
     const html = '<p>range — here and en–dash</p>';
-    const md: string = convert(html, 'HTML', { dashToHyphen: true });
+    const md: string = convert(html, 'HTML', { normalizePunctuation: true });
     expect(md).toContain('range - here and en-dash');
+  });
+
+  it('strips code formatting when dropCode is true', () => {
+    const html = '<p>Use <code>foo()</code> function</p><pre><code>const x = 1;</code></pre>';
+    const md: string = convert(html, 'HTML', { dropCode: true });
+    expect(md).toContain('Use foo() function');
+    expect(md).toContain('const x = 1;');
+    expect(md).not.toContain('`');
+    expect(md).not.toContain('```');
+  });
+
+  it('strips italics when dropItalic is true', () => {
+    const html = '<p>This is <em>emphasized</em> and <i>italics</i></p>';
+    const md: string = convert(html, 'HTML', { dropItalic: true });
+    expect(md).toContain('This is emphasized and italics');
+    expect(md).not.toContain('*emphasized*');
+    expect(md).not.toContain('_italics_');
   });
 
   it('converts h1 to pandoc underline when pandocHeadings is true', () => {

@@ -1,8 +1,9 @@
 import React, { useRef, useState, useImperativeHandle, forwardRef } from 'react';
 import { Paper, TextField, Button, Box, Typography } from '@mui/material';
 import { useTheme } from '@mui/material/styles';
+import useStore from '../store/useStore';
 
-type Props = Readonly<{ value?: string; output?: 'markdown' | 'clean'; onClear?: () => void }>;
+type Props = Readonly<{ onClear?: () => void }>;
 
 export type OutputHandle = {
   insert: (text: string) => void;
@@ -10,24 +11,26 @@ export type OutputHandle = {
   clear: () => void;
 };
 
-const Output = forwardRef<OutputHandle, Props>(function Output(
-  { value = '', output = 'markdown', onClear }: Props,
-  ref,
-) {
+const Output = forwardRef<OutputHandle, Props>(function Output({ onClear }: Props, ref) {
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const cleanBoxRef = useRef<HTMLDivElement | null>(null);
-  const [content, setContent] = useState<string>(value);
+  const output = useStore((s) => s.output);
+  const setOutput = useStore((s) => s.setOutput);
+  const [content, setContent] = useState<string>(output);
   const [focused, setFocused] = useState<boolean>(false);
+  const outputMode = useStore((s) => s.options.output ?? 'markdown');
 
-  // Keep in sync if parent changes value
+  // Keep in sync if store changes value
   React.useEffect(() => {
-    setContent(value);
-  }, [value]);
+    setContent(output);
+  }, [output]);
 
   const insertAtCursor = (text: string) => {
     const el = textareaRef.current;
     if (!el) {
-      setContent((prev) => (prev ? prev + '\n\n' + text : text));
+      const newVal = content ? content + '\n\n' + text : text;
+      setContent(newVal);
+      setOutput(newVal);
       return;
     }
     const start = el.selectionStart ?? el.value.length;
@@ -36,6 +39,7 @@ const Output = forwardRef<OutputHandle, Props>(function Output(
     const after = el.value.substring(end);
     const newValue = before + text + after;
     setContent(newValue);
+    setOutput(newValue);
 
     // set focus and move caret after inserted text
     setTimeout(() => {
@@ -50,6 +54,7 @@ const Output = forwardRef<OutputHandle, Props>(function Output(
     getValue: () => content,
     clear: () => {
       setContent('');
+      setOutput('');
       // Focus the clean box if present, otherwise focus the textarea
       const el = textareaRef.current as HTMLTextAreaElement | null;
       if (el) {
@@ -82,6 +87,7 @@ const Output = forwardRef<OutputHandle, Props>(function Output(
 
   const clearContent = () => {
     setContent('');
+    setOutput('');
     const el = textareaRef.current as HTMLTextAreaElement | null;
     if (el) {
       el.focus();
@@ -150,7 +156,7 @@ const Output = forwardRef<OutputHandle, Props>(function Output(
         </Box>
       ) : (
         <>
-          {output === 'clean' ? (
+          {outputMode === 'clean' ? (
             <Box
               ref={cleanBoxRef}
               sx={{
@@ -173,7 +179,10 @@ const Output = forwardRef<OutputHandle, Props>(function Output(
             <TextField
               inputRef={textareaRef}
               value={content}
-              onChange={(e) => setContent(e.target.value)}
+              onChange={(e) => {
+                setContent(e.target.value);
+                setOutput(e.target.value);
+              }}
               onFocus={() => setFocused(true)}
               onBlur={() => setFocused(false)}
               multiline
@@ -187,7 +196,7 @@ const Output = forwardRef<OutputHandle, Props>(function Output(
             Copy
           </Button>
 
-          {output === 'clean' && (
+          {outputMode === 'clean' && (
             <Button
               sx={{ mt: 1, ml: 1 }}
               variant="outlined"

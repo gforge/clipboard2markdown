@@ -12,62 +12,170 @@ import {
 export type ConvertOptions = {
   dropImages?: boolean;
   dropBold?: boolean;
-  dashToHyphen?: boolean;
+  dropCode?: boolean; // strip code formatting, keep content
+  dropItalic?: boolean; // strip italic/emphasis formatting, keep content
+  normalizePunctuation?: boolean; // replace smart punctuation (— “ ” ’ …) with ASCII
   pandocHeadings?: boolean; // convert #/## to underlined h1/h2
-  headingsToBold?: boolean; // convert headings to bold/plain text (useful for some web forms)
-  gfm?: boolean;
-  dePdf?: boolean; // De-PDF: join hyphenation, collapse soft wraps, remove backslash escapes
+  headingsToBold?: boolean; // convert headings to bold/plain text
+  gfm?: boolean; // currently unused (consider implementing or removing)
+  dePdf?: boolean; // (currently implied by type === 'PDF')
   output?: 'markdown' | 'clean'; // 'clean' returns sanitized HTML instead of Markdown
 };
 
-export function convertToMarkdown(
-  raw: string,
-  type: 'PDF' | 'HTML',
-  options: ConvertOptions = {},
-): string {
-  if (type === 'PDF') {
-    // For PDF text, apply dePdf cleanup and minimal normalization
-    let md = dePdfCleanup(raw);
+type ConvertType = 'PDF' | 'HTML';
+
+type Opt = Required<Pick<ConvertOptions, 'output'>> & ConvertOptions;
+
+const normalizeOptions = (options: ConvertOptions): Opt => ({
+  output: options.output ?? 'markdown',
+  ...options,
+});
+
+const HTML_TAG_RE = /<\/?[a-z][\s\S]*?>/i;
+
+const escapeHtml = (s: string) =>
+  s
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#39;');
+
+const stripCodeFromMarkdown = (md: string): string => {
+  md = md.replaceAll(/```([\s\S]*?)```/g, (_m, inner) => inner.trim());
+  md = md.replaceAll(/`([^`]+)`/g, (_m, inner) => inner);
+  return md;
+};
+
+const stripItalicFromMarkdown = (md: string): string => {
+  // NOTE: regex approach is inherently imperfect for Markdown;
+  // prefer stripping at HTML stage when possible.
+  md = md.replaceAll(/(?<!\*)\*([^*]+)\*(?!\*)/g, (_m, inner) => inner);
+  md = md.replaceAll(/(?<!_)_([^_]+)_(?!_)/g, (_m, inner) => inner);
+  return md;
+};
+
+const applyMarkdownTransforms = (md: string, options: Opt): string => {
+  if (options.pandocHeadings) md = toPandocHeadings(md);
+
+  if (options.headingsToBold) {
+    md = md.replaceAll(/^[ \t]*#{1,6}\s+(.+?)\s*$/gm, (_m, p1) => `**${p1.trim()}**\n\n`);
+    md = md.replaceAll(/^(.*)\n=+$/gm, (_m, p1) => `**${p1.trim()}**\n\n`);
+    md = md.replaceAll(/^(.*)\n-+$/gm, (_m, p1) => `**${p1.trim()}**\n\n`);
+  }
+
+  if (options.dropCode) md = stripCodeFromMarkdown(md);
+  if (options.dropItalic) md = stripItalicFromMarkdown(md);
+
+  return md;
+};
+
+const finalizeText = (text: string, options: Opt): string => {
+  let md = text;
+
+  // Always: normalize whitespace-ish issues
+  md = md.replaceAll(/\u00A0/, ' '); // NBSP
+  md = md.replaceAll(/\n{3,}/g, '\n\n');
+  md = md.replaceAll(/ +$/gm, '');
+
+  if (options.normalizePunctuation) {
     md = normalizePunctuation(md);
-    // Dash normalization
-    if (options.dashToHyphen) {
-      md = md.replaceAll(/[\u2013\u2014]/g, '-');
-    }
-    // Remove control characters
-    md = md.replaceAll(/\p{Cc}/gu, (c: string) =>
-      c === '\n' || c === '\r' || c === '\t' ? c : '',
-    );
-
-    // If user requested 'clean' output, wrap paragraphs into minimal HTML
-    if (options.output === 'clean') {
-      const escapeHtml = (s: string) =>
-        s.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
-      const paragraphs = md
-        .split(/\n{2,}/)
-        .map((p) => `<p>${escapeHtml(p.trim())}</p>`)
-        .join('\n');
-      return paragraphs;
-    }
-
-    return md;
+    md = md.replaceAll(/[\u2013\u2014]/g, '-'); // en/em dash
   }
 
-  // For HTML, proceed with Turndown conversion
-  // Fast-path: if no options and looks like Markdown, return as-is
-  const hasHtmlTags = /<[^>]+>/.test(raw);
+  // Remove control chars except common whitespace
+  md = md.replaceAll(/\p{Cc}/gu, (c) => (c === '\n' || c === '\r' || c === '\t' ? c : ''));
+
+  return md;
+};
+
+const toCleanHtmlFromMarkdown = (md: string): string => {
+  const html = marked.parse(md) as string;
+  // Strip common attributes (keep content)
+  return html.replaceAll(/\s+(?:style|class|id|data-[a-z0-9-]+)="[^"]*"/gi, '');
+};
+
+const turndownCache = new Map<string, TurndownService>();
+
+const getTurndown = (options: Opt): TurndownService => {
+  // Only cache on knobs that affect rules
+  const key = JSON.stringify({
+    dropImages: !!options.dropImages,
+    dropBold: !!options.dropBold,
+    dropCode: !!options.dropCode,
+    dropItalic: !!options.dropItalic,
+  });
+
+  const cached = turndownCache.get(key);
+  if (cached) return cached;
+
+  const svc = new TurndownService({
+    headingStyle: 'atx',
+    codeBlockStyle: 'fenced',
+  });
+
+  svc.addRule('sup', {
+    filter: 'sup',
+    replacement: (content) => `^${content}^`,
+  });
+
+  svc.addRule('sub', {
+    filter: 'sub',
+    replacement: (content) => `~${content}~`,
+  });
+
+  if (options.dropImages) {
+    svc.addRule('dropImages', { filter: 'img', replacement: () => '' });
+  }
+  if (options.dropBold) {
+    svc.addRule('stripBold', { filter: ['strong', 'b'], replacement: (content) => content });
+  }
+  if (options.dropCode) {
+    svc.addRule('stripCode', { filter: ['code', 'pre'], replacement: (content) => content });
+  }
+  if (options.dropItalic) {
+    svc.addRule('stripItalic', { filter: ['em', 'i'], replacement: (content) => content });
+  }
+
+  turndownCache.set(key, svc);
+  return svc;
+};
+
+const convertPdf = (raw: string, options: Opt): string => {
+  const md = finalizeText(dePdfCleanup(raw), options);
+
+  if (options.output === 'clean') {
+    const paragraphs = md
+      .split(/\n{2,}/)
+      .map((p) => p.trim())
+      .filter(Boolean)
+      .map((p) => `<p>${escapeHtml(p)}</p>`)
+      .join('\n');
+    return paragraphs;
+  }
+
+  return md;
+};
+
+const convertHtmlish = (raw: string, options: Opt): string => {
+  const hasHtml = HTML_TAG_RE.test(raw);
   const looksLikeMarkdown = /^(?:\s*#{1,6}\s+|\s*>\s+|^\s*```)/m.test(raw);
-  const noOptionsSet =
-    !options.dropImages &&
-    !options.dropBold &&
-    !options.dashToHyphen &&
-    !options.pandocHeadings &&
-    !options.gfm;
-  if (!hasHtmlTags && looksLikeMarkdown && noOptionsSet) {
-    return raw;
-  }
 
-  // Additional fast-path: if HTML is simple (just <p> tags), unwrap and check if it looks like Markdown
-  if (hasHtmlTags && noOptionsSet) {
+  const hasAnyTransform =
+    !!options.dropImages ||
+    !!options.dropBold ||
+    !!options.dropCode ||
+    !!options.dropItalic ||
+    !!options.normalizePunctuation ||
+    !!options.pandocHeadings ||
+    !!options.headingsToBold ||
+    options.output !== 'markdown';
+
+  // Fast path: already markdown and no transforms requested
+  if (!hasHtml && looksLikeMarkdown && !hasAnyTransform) return raw;
+
+  // Fast path: simple <p>...</p> HTML that unwraps into markdown-ish content
+  if (hasHtml && !hasAnyTransform) {
     const simpleHtml = /^(<p[^>]*>[\s\S]*?<\/p>\s*)+$/i.test(raw.trim());
     if (simpleHtml) {
       const unwrapped = raw
@@ -77,108 +185,33 @@ export function convertToMarkdown(
         .replaceAll('&lt;', '<')
         .replaceAll('&gt;', '>')
         .trim();
-      if (/^(?:\s*#{1,6}\s+|\s*>\s+|^\s*```)/m.test(unwrapped)) {
-        return unwrapped;
-      }
+
+      if (/^(?:\s*#{1,6}\s+|\s*>\s+|^\s*```)/m.test(unwrapped)) return unwrapped;
     }
   }
 
-  type TurndownLike = {
-    addRule: (
-      name: string,
-      rule: {
-        filter: string | string[] | ((node: unknown) => boolean);
-        replacement: (content: string, node?: unknown) => string;
-      },
-    ) => void;
-    turndown: (html: string) => string;
-  };
+  const cleaned = sanitizeHtml(raw) || '';
+  const svc = getTurndown(options);
 
-  // Turndown doesn't provide fully compatible typings here; cast to a local interface.
-  const svc = new TurndownService({
-    headingStyle: 'atx',
-    codeBlockStyle: 'fenced',
-  }) as unknown as TurndownLike;
-
-  // Superscript/subscript rules (mimic pandoc behavior)
-  svc.addRule('sup', {
-    filter: 'sup',
-    replacement: (content: string) => `^${content}^`,
-  });
-
-  svc.addRule('sub', {
-    filter: 'sub',
-    replacement: (content: string) => `~${content}~`,
-  });
-
-  // Option: drop images
-  if (options.dropImages) {
-    svc.addRule('dropImages', {
-      filter: 'img',
-      replacement: () => '',
-    });
-  }
-
-  // Option: strip bold formatting but keep content
-  if (options.dropBold) {
-    svc.addRule('stripBold', {
-      filter: ['strong', 'b'],
-      replacement: (content: string) => content,
-    });
-  }
-
-  // Keep default image behavior otherwise (Turndown default will emit ![alt](src))
-
-  // Sanitize incoming HTML to remove top-of-document style cruft
-  const cleaned = sanitizeHtml(raw);
-  let md = svc.turndown(cleaned || '');
-
-  // Prefer original heading text (conservative) when source HTML contained heading tags
-  // This avoids Turndown/newline heuristics splitting a heading across the following paragraph.
+  let md = svc.turndown(cleaned);
   md = preferOriginalH1Heading(cleaned, md);
+  md = applyMarkdownTransforms(md, options);
+  md = finalizeText(md, options);
 
-  // Optional: convert ATX headings to Pandoc-style underlines for h1 and h2
-  if (options.pandocHeadings) {
-    md = toPandocHeadings(md);
-  }
-
-  // Dash normalization: convert en/em dash to single hyphen
-  if (options.dashToHyphen) {
-    md = md.replaceAll(/[\u2013\u2014]/g, '-');
-  }
-
-  // Minimal punctuation/whitespace normalization
-  md = normalizePunctuation(md);
-
-  // Ensure numbered headings separated from following paragraph
-  // Only apply this when the source HTML did NOT contain heading tags (tag-less concatenations)
   const hadHeadingTags = /<h[1-6]\b/i.test(cleaned);
-  if (!hadHeadingTags) {
-    md = ensureNumberedHeadingParagraphBreak(md);
-  }
+  if (!hadHeadingTags) md = ensureNumberedHeadingParagraphBreak(md);
 
-  // Option: convert headings to bold/plain text (useful when pasting into form fields that don't like '#' headings)
-  if (options.headingsToBold) {
-    // Convert ATX headings like '# Title' to '**Title**' and ensure paragraph break after
-    md = md.replaceAll(/^[ \t]*#{1,6}\s+(.+?)\s*$/gm, (_m, p1) => `**${p1.trim()}**\n\n`);
-    // Convert underlined/pandoc-style headings and add paragraph break
-    md = md.replaceAll(/^(.*)\n=+$/gm, (_m, p1) => `**${p1.trim()}**\n\n`);
-    md = md.replaceAll(/^(.*)\n-+$/gm, (_m, p1) => `**${p1.trim()}**\n\n`);
-  }
-
-  // Remove any non-printable control characters introduced by pasted content, but keep common whitespace (\n, \r, \t)
-  md = md.replaceAll(/\p{Cc}/gu, (c) => (c === '\n' || c === '\r' || c === '\t' ? c : ''));
-
-  // If the user requested a clean HTML output, render the markdown back to HTML and strip attributes
-  if (options.output === 'clean') {
-    // Ensure we have a string result from marked (older/newer versions may return Promise/string)
-    const html = String(marked(md));
-    // Strip style/class/id/data-* attributes that could carry presentation info
-    const stripped = html.replaceAll(/\s+(?:style|class|id|data-[a-z0-9-]+)="[^"]*"/gi, '');
-    return stripped;
-  }
-
+  if (options.output === 'clean') return toCleanHtmlFromMarkdown(md);
   return md;
+};
+
+export function convertToMarkdown(
+  raw: string,
+  type: ConvertType,
+  options: ConvertOptions = {},
+): string {
+  const opt = normalizeOptions(options);
+  return type === 'PDF' ? convertPdf(raw, opt) : convertHtmlish(raw, opt);
 }
 
 export default convertToMarkdown;

@@ -1,30 +1,27 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { Container, Typography, Box } from '@mui/material';
 import PasteArea from './components/PasteArea';
 import Output from './components/Output';
 import Settings from './components/Settings';
-import type { ConvertOptions } from './lib/converter';
+import useStore from './store/useStore';
 
 export default function App() {
-  const [markdown, setMarkdown] = useState<string>('');
-  const [options, setOptions] = useState<ConvertOptions>({
-    dashToHyphen: true,
-    dropImages: true,
-    dePdf: false,
-    output: 'markdown',
-  });
-  const outputRef = React.useRef<import('./components/Output').OutputHandle | null>(null);
-
-  const appendOrInsertMarkdown = (md: string) => {
-    // Insert converted markdown into the output at the current caret position
-    const out = outputRef.current;
+  const output = useStore((s) => s.output);
+  const appendOrInsertMarkdown = (
+    md: string,
+    outputRef?: React.RefObject<import('./components/Output').OutputHandle | null>,
+  ) => {
+    // Insert converted markdown into the output at the current caret position if ref provided
+    const out = outputRef?.current;
     if (out && typeof out.insert === 'function') {
       out.insert(md);
     } else {
-      // Fallback: append
-      setMarkdown((prev) => (prev ? prev + '\n\n' + md : md));
+      // Fallback: append using the store
+      useStore.getState().appendOutput(md);
     }
   };
+
+  const outputRef = React.useRef<import('./components/Output').OutputHandle | null>(null);
 
   return (
     <Container
@@ -36,16 +33,15 @@ export default function App() {
       </Typography>
 
       <Box sx={{ my: 1 }}>
-        <Settings options={options} onChange={setOptions} />
+        <Settings />
       </Box>
 
       <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 2 }}>
         <PasteArea
-          saveText={appendOrInsertMarkdown}
-          options={options}
-          activeWhenEmpty={markdown.trim() === ''}
+          saveText={(md: string) => appendOrInsertMarkdown(md, outputRef)}
+          activeWhenEmpty={output.trim() === ''}
         />
-        <Output ref={outputRef} value={markdown} output={options.output} />
+        <Output ref={outputRef} />
       </Box>
     </Container>
   );

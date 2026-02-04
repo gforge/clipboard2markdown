@@ -21,6 +21,7 @@ export function preferOriginalH1Heading(cleanedHtml: string, md: string): string
   const h1text = decodeHtmlEntities(h1m[1]);
   const normalize = (s: string) => s.replaceAll(/\s+/g, ' ').trim();
 
+  // Intentional single-replace: prefer the first heading match only (do not replace globally).
   return md.replace(
     /^(#{1,6})\s*([^\n]+)(?:\n\s*)*([^\n]+)?/m,
     (match, hashes, firstLine, secondLine) => {

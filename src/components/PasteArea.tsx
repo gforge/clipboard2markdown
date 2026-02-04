@@ -1,11 +1,10 @@
 import React, { useRef, useEffect } from 'react';
 import { Paper } from '@mui/material';
 import convertToMarkdown from '../lib/converter';
-import type { ConvertOptions } from '../lib/converter';
+import useStore from '../store/useStore';
 
 type Props = Readonly<{
   saveText: (text: string) => void;
-  options?: ConvertOptions;
   activeWhenEmpty?: boolean;
 }>;
 
@@ -14,8 +13,10 @@ const looksPdfLike = (text: string): boolean => {
   return /[\u00AD\u00A0]/.test(text);
 };
 
-export default function PasteArea({ saveText, options = {}, activeWhenEmpty = true }: Props) {
+export default function PasteArea({ saveText, activeWhenEmpty = true }: Props) {
   const ref = useRef<HTMLTextAreaElement | null>(null);
+  const options = useStore((s) => s.options);
+  const addPaste = useStore((s) => s.addPaste);
 
   const focusPaste = () => ref.current?.focus();
 
@@ -32,17 +33,21 @@ export default function PasteArea({ saveText, options = {}, activeWhenEmpty = tr
 
       if (options.dePdf === true || looksPdfLike(text)) {
         const md = convertToMarkdown(text, 'PDF', options);
+        // persist raw input for re-conversion on settings change
+        addPaste('PDF', text);
         saveText(md);
         return true;
       }
 
       // Keep as is
+      addPaste('TEXT', text);
       saveText(text);
       return true;
     };
 
     if (htmlFromClipboard) {
       const md = convertToMarkdown(htmlFromClipboard, 'HTML', options);
+      addPaste('HTML', htmlFromClipboard);
       saveText(md);
       return;
     }
