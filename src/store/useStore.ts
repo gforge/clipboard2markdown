@@ -21,6 +21,9 @@ type Store = {
   clearPastes: () => void;
   setOutput: (out: string) => void;
   appendOutput: (out: string) => void;
+  // user editing helpers
+  setOutputManual: (out: string) => void;
+  setRawFromHtml: (html: string) => void;
 };
 
 const looksPdfLike = (text: string) => /[\u00AD\u00A0]/.test(text);
@@ -68,9 +71,27 @@ export const useStore = create<Store>()(
         });
       },
       clearPastes: () => set({ rawInputs: [], output: '' }),
-      setOutput: (out: string) => set({ output: out }),
+      setOutput: (out: string) =>
+        set(() => {
+          if (out === '') {
+            return { output: out, rawInputs: [] } as Partial<Store> as Store;
+          }
+          return { output: out } as Partial<Store> as Store;
+        }),
+      // Set output manually (user editing) and clear raw inputs to avoid later reversion
+      setOutputManual: (out: string) =>
+        set(() => ({ output: out, rawInputs: [] }) as Partial<Store> as Store),
       appendOutput: (out: string) =>
         set((s: Store) => ({ output: s.output ? s.output + '\n\n' + out : out })),
+      // Replace current raw inputs with a single HTML paste (used when user edits markdown)
+      setRawFromHtml: (html: string) => {
+        const id = Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+        set((state: Store) => {
+          const rawInputs = [{ id, type: 'HTML' as RawEntryType, text: html }];
+          const output = computeOutputFromRaw(rawInputs, state.options);
+          return { rawInputs, output } as Partial<Store> as Store;
+        });
+      },
     }),
     {
       name: 'clipboard2markdown:options',

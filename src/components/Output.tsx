@@ -55,14 +55,17 @@ const Output = forwardRef<OutputHandle, Props>(function Output({ onClear }: Prop
     clear: () => {
       setContent('');
       setOutput('');
-      // Focus the clean box if present, otherwise focus the textarea
+      // Also clear the saved raw inputs so conversion doesn't revert
+      useStore.getState().clearPastes();
+
+      // Blur any focused element and ensure instruction UI shows
       const el = textareaRef.current as HTMLTextAreaElement | null;
       if (el) {
-        el.focus();
-        el.setSelectionRange(0, 0);
+        el.blur();
       } else {
-        cleanBoxRef.current?.focus();
+        cleanBoxRef.current?.blur?.();
       }
+      setFocused(false);
       onClear?.();
     },
   }));
@@ -88,15 +91,19 @@ const Output = forwardRef<OutputHandle, Props>(function Output({ onClear }: Prop
   const clearContent = () => {
     setContent('');
     setOutput('');
+    // Also clear saved raw inputs to prevent reversion
+    useStore.getState().clearPastes();
+
+    // Blur any focused element so the instruction UI reappears
     const el = textareaRef.current as HTMLTextAreaElement | null;
     if (el) {
-      el.focus();
-      el.setSelectionRange(0, 0);
+      el.blur();
     } else {
-      cleanBoxRef.current?.focus();
+      cleanBoxRef.current?.blur?.();
     }
+    setFocused(false);
     onClear?.();
-  };
+  }; 
 
   const showHelp = !focused && content.trim() === '';
 
@@ -181,10 +188,23 @@ const Output = forwardRef<OutputHandle, Props>(function Output({ onClear }: Prop
               value={content}
               onChange={(e) => {
                 setContent(e.target.value);
-                setOutput(e.target.value);
+                // Manual user edits should clear raw inputs to avoid later reversion
+                useStore.getState().setOutputManual(e.target.value);
               }}
               onFocus={() => setFocused(true)}
-              onBlur={() => setFocused(false)}
+              onBlur={async () => {
+                setFocused(false);
+                // On blur, persist user edits: if empty, clear store; otherwise convert markdown to HTML and save as new HTML paste
+                const val = content;
+                if (val.trim() === '') {
+                  useStore.getState().clearPastes();
+                } else {
+                  // Convert markdown to HTML and replace raw inputs
+                  const { marked } = await import('marked');
+                  const html = marked.parse(val) as string;
+                  useStore.getState().setRawFromHtml(html);
+                }
+              }}
               multiline
               minRows={12}
               fullWidth

@@ -74,13 +74,20 @@ const finalizeText = (text: string, options: Opt): string => {
   let md = text;
 
   // Always: normalize whitespace-ish issues
-  md = md.replaceAll(/\u00A0/, ' '); // NBSP
+  md = md.replaceAll('\u00A0', ' '); // NBSP
   md = md.replaceAll(/\n{3,}/g, '\n\n');
-  md = md.replaceAll(/ +$/gm, '');
+  // Trim trailing spaces on each line but preserve two-or-more spaces (Markdown hard break)
+  md = md
+    .split('\n')
+    .map((line) => {
+      const m = /( +)$/.exec(line);
+      if (!m) return line;
+      return m[1].length >= 2 ? line : line.replace(/ +$/, '');
+    })
+    .join('\n');
 
   if (options.normalizePunctuation) {
     md = normalizePunctuation(md);
-    md = md.replaceAll(/[\u2013\u2014]/g, '-'); // en/em dash
   }
 
   // Remove control chars except common whitespace
@@ -122,6 +129,12 @@ const getTurndown = (options: Opt): TurndownService => {
   svc.addRule('sub', {
     filter: 'sub',
     replacement: (content) => `~${content}~`,
+  });
+
+  // Ensure <br> produces a Markdown hard break (two spaces + newline)
+  svc.addRule('hardBreak', {
+    filter: 'br',
+    replacement: () => '  \n',
   });
 
   if (options.dropImages) {

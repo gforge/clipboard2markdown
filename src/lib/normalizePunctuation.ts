@@ -3,7 +3,11 @@ export function normalizePunctuation(md: string): string {
     md
       .replaceAll(/[\u2018\u2019\u00b4]/g, "'")
       .replaceAll(/[\u201c\u201d\u2033]/g, '"')
-      .replaceAll(/[\u2212\u2022\u00b7\u25aa]/g, '-')
+      // Replace various dash-like characters with a simple hyphen
+      // 2212: minus sign
+      // 2013: en-dash
+      // 2014: em-dash
+      .replaceAll(/[\u2212\u2013\u2014]/g, '-')
       .replaceAll('\u2026', '...')
       // Normalize CRLF to LF
       .replaceAll(/\r\n?/g, '\n')

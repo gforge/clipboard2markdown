@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { convertToMarkdown } from '../src/lib/converter';
 import type { ConvertOptions } from '../src/lib/converter';
+import TurndownService from 'turndown';
 
 // Cast the imported function to a well-typed signature to satisfy strict lint rules
 const convert = convertToMarkdown as (
@@ -109,5 +110,31 @@ dddd`;
     const out = convert(html, 'HTML', { headingsToBold: true, output: 'clean' });
     expect(out.toLowerCase()).toContain('<p><strong>title</strong>');
     expect(out.toLowerCase()).toContain('<p>text');
+  });
+
+  it('preserves hard line breaks from <br/> as two-space + newline', () => {
+    const html = '<h1>Demo</h1><p>ABC</p><p>asdasd<br />asda</p>';
+    const md = convert(html, 'HTML', {});
+    // Should be a hard line break represented by two spaces then newline
+    expect(md).toContain('asdasd  \nasda');
+  });
+
+  it('shows how Turndown handles <br/> by default and with a custom rule', () => {
+    const svcDefault = new TurndownService({ headingStyle: 'atx', codeBlockStyle: 'fenced' });
+    const defaultOut = svcDefault.turndown('<p>asdasd<br/>asda</p>');
+
+    const svcCustom = new TurndownService({ headingStyle: 'atx', codeBlockStyle: 'fenced' });
+    svcCustom.addRule('hardBreakTest', {
+      filter: (node: { nodeName: string }) => node.nodeName === 'BR',
+      replacement: () => '  \n',
+    });
+    const customOut = svcCustom.turndown('<p>asdasd<br/>asda</p>');
+
+    // Default behaviour may or may not include two spaces; ensure our custom rule produces the expected hard break
+    expect(customOut).toContain('asdasd  \nasda');
+    // And if default doesn't already include hard break, show that adding the rule changes the result
+    if (!defaultOut.includes('  \n')) {
+      expect(defaultOut).not.toEqual(customOut);
+    }
   });
 });

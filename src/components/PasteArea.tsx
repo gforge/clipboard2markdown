@@ -20,30 +20,28 @@ export default function PasteArea({ saveText, activeWhenEmpty = true }: Props) {
 
   const focusPaste = () => ref.current?.focus();
 
-  const handlePaste = async (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
-    e.preventDefault();
+  const processNonHtmlTextAndConvert = (text?: string): boolean => {
+    if (!text) return false;
 
-    const htmlFromClipboard = e.clipboardData?.getData('text/html');
-    const textFromClipboard = e.clipboardData?.getData('text/plain');
+    if (text.trim() === '') return false;
 
-    const processNonHtmlTextAndConvert = (text?: string): boolean => {
-      if (!text) return false;
-
-      if (text.trim() === '') return false;
-
-      if (options.dePdf === true || looksPdfLike(text)) {
-        const md = convertToMarkdown(text, 'PDF', options);
-        // persist raw input for re-conversion on settings change
-        addPaste('PDF', text);
-        saveText(md);
-        return true;
-      }
-
-      // Keep as is
-      addPaste('TEXT', text);
-      saveText(text);
+    if (options.dePdf === true || looksPdfLike(text)) {
+      const md = convertToMarkdown(text, 'PDF', options);
+      // persist raw input for re-conversion on settings change
+      addPaste('PDF', text);
+      saveText(md);
       return true;
-    };
+    }
+
+    // Keep as is
+    addPaste('TEXT', text);
+    saveText(text);
+    return true;
+  };
+
+  const processClipboard = async (clipboardData?: DataTransfer | null) => {
+    const htmlFromClipboard = clipboardData?.getData && clipboardData.getData('text/html');
+    const textFromClipboard = clipboardData?.getData && clipboardData.getData('text/plain');
 
     if (htmlFromClipboard) {
       const md = convertToMarkdown(htmlFromClipboard, 'HTML', options);
@@ -57,7 +55,7 @@ export default function PasteArea({ saveText, activeWhenEmpty = true }: Props) {
     }
 
     // Try to extract string data from DataTransfer items (covers some PDF viewers / RTF)
-    const items = e.clipboardData?.items;
+    const items = clipboardData?.items;
     if (items && items.length) {
       for (const it of Array.from(items)) {
         if (it.kind === 'string' && it.type.startsWith('text/')) {
@@ -90,6 +88,11 @@ export default function PasteArea({ saveText, activeWhenEmpty = true }: Props) {
     }, 0);
   };
 
+  const handlePaste = async (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
+    e.preventDefault();
+    await processClipboard(e.clipboardData);
+  };
+
   // Listen for global paste and focus hidden paste target when active
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -101,6 +104,20 @@ export default function PasteArea({ saveText, activeWhenEmpty = true }: Props) {
     globalThis.addEventListener('keydown', handler);
     return () => globalThis.removeEventListener('keydown', handler);
   }, [activeWhenEmpty]);
+
+  // Also listen for global paste events as a more reliable capture mechanism.
+  useEffect(() => {
+    const onGlobalPaste = async (e: ClipboardEvent) => {
+      if (!activeWhenEmpty) return;
+      // If the paste originated on our hidden textarea, let its handler deal with it
+      if (e.target === ref.current) return;
+      e.preventDefault();
+      await processClipboard(e.clipboardData ?? null);
+    };
+
+    globalThis.addEventListener('paste', onGlobalPaste);
+    return () => globalThis.removeEventListener('paste', onGlobalPaste);
+  }, [activeWhenEmpty, options]);
 
   // Hidden textarea receives paste events; keeps UI focused on Output only
   return (
