@@ -1,7 +1,8 @@
 import React, { useRef, useState, useImperativeHandle, forwardRef } from 'react';
-import { Paper, TextField, Button, Box, Typography } from '@mui/material';
+import { Paper, TextField, Box, Typography } from '@mui/material';
 import { useTheme } from '@mui/material/styles';
 import useStore from '../store/useStore';
+import OutputControls from './OutputControls';
 
 type Props = Readonly<{ onClear?: () => void }>;
 
@@ -20,10 +21,34 @@ const Output = forwardRef<OutputHandle, Props>(function Output({ onClear }: Prop
   const [focused, setFocused] = useState<boolean>(false);
   const outputMode = useStore((s) => s.options.output ?? 'markdown');
 
+  const rawInputsCount = useStore((s) => s.rawInputs.length);
+  const prevRawCountRef = useRef<number>(rawInputsCount);
+
   // Keep in sync if store changes value
   React.useEffect(() => {
     setContent(output);
   }, [output]);
+
+  // When a new paste is added, focus the appropriate output area (textarea or clean box).
+  React.useEffect(() => {
+    const prev = prevRawCountRef.current;
+    if (rawInputsCount > prev) {
+      if (outputMode === 'clean') {
+        cleanBoxRef.current?.focus();
+      } else {
+        const el = textareaRef.current as HTMLTextAreaElement | null;
+        // Ensure content is rendered before focusing/selecting
+        setTimeout(() => {
+          if (el) {
+            el.focus();
+            const pos = el.value.length;
+            el.setSelectionRange(pos, pos);
+          }
+        }, 0);
+      }
+    }
+    prevRawCountRef.current = rawInputsCount;
+  }, [rawInputsCount, outputMode]);
 
   const insertAtCursor = (text: string) => {
     const el = textareaRef.current;
@@ -103,7 +128,7 @@ const Output = forwardRef<OutputHandle, Props>(function Output({ onClear }: Prop
     }
     setFocused(false);
     onClear?.();
-  }; 
+  };
 
   const showHelp = !focused && content.trim() === '';
 
@@ -163,6 +188,10 @@ const Output = forwardRef<OutputHandle, Props>(function Output({ onClear }: Prop
         </Box>
       ) : (
         <>
+          <Box sx={{ mb: 1 }}>
+            <OutputControls onCopy={copy} onClear={clearContent} />
+          </Box>
+
           {outputMode === 'clean' ? (
             <Box
               ref={cleanBoxRef}
@@ -212,20 +241,9 @@ const Output = forwardRef<OutputHandle, Props>(function Output({ onClear }: Prop
             />
           )}
 
-          <Button sx={{ mt: 1 }} variant="contained" onClick={copy}>
-            Copy
-          </Button>
-
-          {outputMode === 'clean' && (
-            <Button
-              sx={{ mt: 1, ml: 1 }}
-              variant="outlined"
-              color="secondary"
-              onClick={clearContent}
-            >
-              Clear
-            </Button>
-          )}
+          <Box sx={{ mt: 1, display: 'flex', justifyContent: 'flex-end' }}>
+            <OutputControls onCopy={copy} onClear={clearContent} />
+          </Box>
         </>
       )}
     </Paper>
