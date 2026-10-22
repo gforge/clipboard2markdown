@@ -63,3 +63,37 @@ describe('zustand store', () => {
     expect(out).toContain('asdasd');
   });
 });
+
+describe('zustand store: paste replacement and clipboard state', () => {
+  beforeEach(() => {
+    useStore.setState({
+      rawInputs: [],
+      output: '',
+      copiedText: null,
+      prefs: { autoCopy: true },
+      options: { normalizePunctuation: true, dropImages: true, dePdf: false, output: 'markdown' },
+    });
+  });
+
+  it('replacePaste discards earlier pastes', () => {
+    useStore.getState().addPaste('HTML', '<p>first</p>');
+    useStore.getState().replacePaste('HTML', '<p>second</p>');
+    expect(useStore.getState().rawInputs.length).toBe(1);
+    expect(useStore.getState().output).toBe('second');
+  });
+
+  it('tracks the copied text and forgets it on clear', () => {
+    useStore.getState().replacePaste('HTML', '<p>copy me</p>');
+    useStore.getState().markCopied(useStore.getState().output);
+    expect(useStore.getState().copiedText).toBe('copy me');
+    useStore.getState().clearPastes();
+    expect(useStore.getState().copiedText).toBeNull();
+    expect(useStore.getState().output).toBe('');
+  });
+
+  it('persists preferences separately from converter options', () => {
+    useStore.getState().setPrefs({ autoCopy: false });
+    expect(useStore.getState().prefs.autoCopy).toBe(false);
+    expect(useStore.getState().options).not.toHaveProperty('autoCopy');
+  });
+});

@@ -1,48 +1,48 @@
-import React from 'react';
-import { Container, Typography, Box } from '@mui/material';
-import PasteArea from './components/PasteArea';
-import Output from './components/Output';
-import Settings from './components/Settings';
+import React, { useLayoutEffect, useRef } from 'react';
+import { Box, Container } from '@mui/material';
+import Header from './components/Header';
+import OptionsSidebar from './components/OptionsSidebar';
+import OutputPanel from './components/OutputPanel';
+import EmptyState from './components/EmptyState';
+import usePasteCapture from './hooks/usePasteCapture';
 import useStore from './store/useStore';
 
 export default function App() {
-  const output = useStore((s) => s.output);
-  const appendOrInsertMarkdown = (
-    md: string,
-    outputRef?: React.RefObject<import('./components/Output').OutputHandle | null>,
-  ) => {
-    // Insert converted markdown into the output at the current caret position if ref provided
-    const out = outputRef?.current;
-    if (out && typeof out.insert === 'function') {
-      out.insert(md);
-    } else {
-      // Fallback: append using the store
-      useStore.getState().appendOutput(md);
-    }
-  };
+  const hasOutput = useStore((s) => s.output.trim() !== '');
+  const { copyOutput, readClipboard } = usePasteCapture();
+  const headerRef = useRef<HTMLElement | null>(null);
 
-  const outputRef = React.useRef<import('./components/Output').OutputHandle | null>(null);
+  // Expose the header height so the output toolbar can stick right below it.
+  useLayoutEffect(() => {
+    const el = headerRef.current;
+    if (!el || typeof ResizeObserver === 'undefined') return;
+    const apply = () =>
+      document.documentElement.style.setProperty('--header-h', `${el.offsetHeight}px`);
+    apply();
+    const ro = new ResizeObserver(apply);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
 
   return (
-    <Container
-      maxWidth="lg"
-      sx={{ py: 3, height: '100vh', display: 'flex', flexDirection: 'column' }}
-    >
-      <Typography className="appTitle" variant="h4" component="h1" gutterBottom>
-        Clipboard → Markdown
-      </Typography>
-
-      <Box sx={{ my: 1 }}>
-        <Settings />
-      </Box>
-
-      <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 2 }}>
-        <PasteArea
-          saveText={(md: string) => appendOrInsertMarkdown(md, outputRef)}
-          activeWhenEmpty={output.trim() === ''}
-        />
-        <Output ref={outputRef} />
-      </Box>
-    </Container>
+    <Box sx={{ minHeight: '100dvh', bgcolor: 'background.default', color: 'text.primary' }}>
+      <Header ref={headerRef} />
+      <Container
+        component="main"
+        maxWidth="lg"
+        sx={{ py: 3, display: 'flex', flexWrap: 'wrap', gap: 3, alignItems: 'flex-start' }}
+      >
+        <Box sx={{ flex: '1 1 260px', maxWidth: { sm: 300 } }}>
+          <OptionsSidebar />
+        </Box>
+        <Box sx={{ flex: '999 1 480px', minWidth: 0 }}>
+          {hasOutput ? (
+            <OutputPanel onCopy={copyOutput} />
+          ) : (
+            <EmptyState onReadClipboard={readClipboard} />
+          )}
+        </Box>
+      </Container>
+    </Box>
   );
 }

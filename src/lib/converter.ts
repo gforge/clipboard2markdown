@@ -96,7 +96,7 @@ const finalizeText = (text: string, options: Opt): string => {
   return md;
 };
 
-const toCleanHtmlFromMarkdown = (md: string): string => {
+export const toCleanHtmlFromMarkdown = (md: string): string => {
   const html = marked.parse(md) as string;
   // Strip common attributes (keep content)
   return html.replaceAll(/\s+(?:style|class|id|data-[a-z0-9-]+)="[^"]*"/gi, '');

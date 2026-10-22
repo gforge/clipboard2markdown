@@ -13,11 +13,19 @@ safer for modern workflows.
 Key differences:
 
 - New **Clean HTML** output mode (sanitized HTML output in addition to Markdown)
+- **Copy result automatically**: the converted text is written back to the
+  clipboard as soon as you paste, so there is no button to find
+- Paste anywhere on the page to replace the output, or paste inside the editor
+  to insert converted text at the caret; a **Read clipboard** button covers
+  browsers that block page-level paste
+- **Show preview / Show source** toggle for rendered output, plus line, word
+  and character counts and a `Ctrl/⌘ + Shift + C` copy shortcut
 - Option to **Convert headings to bold** (useful when pasting into rich web forms that fail to properly handle `#` headings during PDF-conversion)
-- Options: `drop images`, `drop bold`, `dash → hyphen`, `De-PDF` cleanup, `pandoc` headings
-- Rendering of Clean HTML directly in the Output pane with a **Clear** action
+- Options: `drop images`, `drop bold`, `drop italics`, `drop code`,
+  `normalize punctuation`, `De-PDF` cleanup
+- Light and dark themes following the system setting
 - Improved sanitization and attribute stripping when producing HTML
-- Unit tests with **Vitest** and a cleaner dev setup (Vite, TypeScript)
+- Unit tests with **Vitest** and a cleaner dev setup (Vite, TypeScript, MUI)
 
 ## Demo
 
@@ -57,8 +65,12 @@ npm test
 - Paste from any app (web page, Word, PDF viewers) and the app will attempt to
   detect HTML, plain text, or typical PDF artifacts and apply a sensible
   conversion.
-- Toggle **Clean HTML** in the _Options_ to return minimal, sanitized HTML
-  instead of Markdown (useful for pasting into rich text form fields).
+- Switch between **Markdown** and **Clean HTML** in the header to return
+  minimal, sanitized HTML instead of Markdown (useful for pasting into rich
+  text form fields).
+- Turn off **Copy result automatically** in the sidebar if you prefer to edit
+  the output before copying; the **Copied to clipboard** badge tells you when
+  the clipboard matches what is on screen.
 - Use **Convert headings to bold** when heading markers (`#`) cause issues in
   target web forms; the converter will turn headings into bold paragraphs.
 - `De-PDF` mode attempts to undo soft hyphenation and broken line wraps common
@@ -72,6 +84,10 @@ npm test
   `style`, `class`, `id`, and `data-*` attributes.
 - The converter is conservative with headings: when the source contains
   heading tags we try to preserve the original heading text and spacing.
+- UI state lives in a small **Zustand** store (`src/store/useStore.ts`);
+  converter options and the auto-copy preference persist in `localStorage`.
+  Clipboard capture and the copy shortcut live in `src/hooks/usePasteCapture.ts`,
+  and the design tokens in `src/theme.ts`.
 
 ## Icons & PWA
 
