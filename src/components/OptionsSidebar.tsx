@@ -74,6 +74,11 @@ export default function OptionsSidebar() {
           'Headings → bold',
           'Turn headings into bold paragraphs (for rich form fields that mangle # headings)',
         )}
+        {row(
+          'alignTables',
+          'Align table columns',
+          'Pad Markdown table cells so the columns line up in the source',
+        )}
       </OptionCard>
 
       <OptionCard title="After paste">

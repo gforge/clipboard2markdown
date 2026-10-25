@@ -24,7 +24,9 @@ export function normalizePunctuation(md: string): string {
       // Tidy spaces and punctuation
       .replaceAll('\u00A0', ' ')
       .replaceAll(/\s+([,.;:!?])/g, '$1')
-      .replaceAll(/ {2,}/g, ' ')
+      // Collapse runs of spaces, but keep leading indentation (nested lists,
+      // code) and the padding of empty table cells
+      .replaceAll(/([^\s|]) {2,}/g, '$1 ')
       .replaceAll(/ +$/gm, '')
       .trim()
   );

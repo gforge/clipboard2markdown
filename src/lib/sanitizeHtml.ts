@@ -12,5 +12,10 @@ export const sanitizeHtml = (input: string = ''): string => {
   s = s.replaceAll(/\sstyle="[^"]*"/gi, '');
   // Remove Microsoft-specific tags like <o:p>
   s = s.replaceAll(/<o:p>[\s\S]*?<\/o:p>/gi, '');
+  // Word/Outlook often split one list into consecutive <ul> blocks (one per item
+  // or per formatting run). Merge them so they convert to a single tight list;
+  // for <ol> only when the next block explicitly continues the numbering.
+  s = s.replaceAll(/<\/ul>\s*<ul(?:\s[^>]*)?>/gi, '');
+  s = s.replaceAll(/<\/ol>\s*<ol\s[^>]*\bstart=["']?\d+["']?[^>]*>/gi, '');
   return s.trim();
 };

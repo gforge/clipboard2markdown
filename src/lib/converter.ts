@@ -3,6 +3,8 @@ import { marked } from 'marked';
 import { sanitizeHtml } from './sanitizeHtml';
 import { normalizePunctuation } from './normalizePunctuation';
 import { dePdfCleanup } from './dePdfCleanup';
+import { addListRules, addTableRules } from './turndownRules';
+import { alignMarkdownTables } from './markdownTables';
 import {
   preferOriginalH1Heading,
   toPandocHeadings,
@@ -17,6 +19,7 @@ export type ConvertOptions = {
   normalizePunctuation?: boolean; // replace smart punctuation (— “ ” ’ …) with ASCII
   pandocHeadings?: boolean; // convert #/## to underlined h1/h2
   headingsToBold?: boolean; // convert headings to bold/plain text
+  alignTables?: boolean; // pad pipe-table columns so the Markdown source lines up
   gfm?: boolean; // currently unused (consider implementing or removing)
   dePdf?: boolean; // (currently implied by type === 'PDF')
   output?: 'markdown' | 'clean'; // 'clean' returns sanitized HTML instead of Markdown
@@ -49,9 +52,11 @@ const stripCodeFromMarkdown = (md: string): string => {
 
 const stripItalicFromMarkdown = (md: string): string => {
   // NOTE: regex approach is inherently imperfect for Markdown;
-  // prefer stripping at HTML stage when possible.
-  md = md.replaceAll(/(?<!\*)\*([^*]+)\*(?!\*)/g, (_m, inner) => inner);
-  md = md.replaceAll(/(?<!_)_([^_]+)_(?!_)/g, (_m, inner) => inner);
+  // prefer stripping at HTML stage when possible. The span must stay on one
+  // line and the markers must hug the text, otherwise "* item" list markers
+  // on consecutive lines (or snake_case words) get paired up and deleted.
+  md = md.replaceAll(/(?<![*\w])\*(?=\S)([^*\n]+?)(?<=\S)\*(?![*\w])/g, (_m, inner) => inner);
+  md = md.replaceAll(/(?<![_\w])_(?=\S)([^_\n]+?)(?<=\S)_(?![_\w])/g, (_m, inner) => inner);
   return md;
 };
 
@@ -72,6 +77,11 @@ const applyMarkdownTransforms = (md: string, options: Opt): string => {
 
 const finalizeText = (text: string, options: Opt): string => {
   let md = text;
+
+  // Drop characters that carry no text: private-use glyphs (Word Symbol-font
+  // bullets, Outlook icon placeholders), zero-width spaces, word joiners,
+  // BOMs and soft hyphens. They render as missing-glyph boxes in Markdown.
+  md = md.replaceAll(/[\p{Co}\u200B\u2060\uFEFF\u00AD]/gu, '');
 
   // Always: normalize whitespace-ish issues
   md = md.replaceAll('\u00A0', ' '); // NBSP
@@ -120,6 +130,9 @@ const getTurndown = (options: Opt): TurndownService => {
     headingStyle: 'atx',
     codeBlockStyle: 'fenced',
   });
+
+  addListRules(svc);
+  addTableRules(svc);
 
   svc.addRule('sup', {
     filter: 'sup',
@@ -182,6 +195,7 @@ const convertHtmlish = (raw: string, options: Opt): string => {
     !!options.normalizePunctuation ||
     !!options.pandocHeadings ||
     !!options.headingsToBold ||
+    !!options.alignTables ||
     options.output !== 'markdown';
 
   // Fast path: already markdown and no transforms requested
@@ -203,6 +217,17 @@ const convertHtmlish = (raw: string, options: Opt): string => {
     }
   }
 
+  const finish = (md: string): string => {
+    if (options.output === 'clean') return toCleanHtmlFromMarkdown(md);
+    // Runs last: normalizePunctuation collapses runs of spaces, which would undo the padding.
+    if (options.alignTables) md = alignMarkdownTables(md);
+    return md;
+  };
+
+  // Plain text / Markdown: never run it through Turndown, which would escape
+  // Markdown syntax and collapse line breaks. Apply the text transforms only.
+  if (!hasHtml) return finish(finalizeText(applyMarkdownTransforms(raw, options), options));
+
   const cleaned = sanitizeHtml(raw) || '';
   const svc = getTurndown(options);
 
@@ -214,8 +239,7 @@ const convertHtmlish = (raw: string, options: Opt): string => {
   const hadHeadingTags = /<h[1-6]\b/i.test(cleaned);
   if (!hadHeadingTags) md = ensureNumberedHeadingParagraphBreak(md);
 
-  if (options.output === 'clean') return toCleanHtmlFromMarkdown(md);
-  return md;
+  return finish(md);
 };
 
 export function convertToMarkdown(

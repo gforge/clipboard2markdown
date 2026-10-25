@@ -64,6 +64,7 @@ export const useStore = create<Store>()(
         dropCode: false,
         dropItalic: false,
         dePdf: false,
+        alignTables: true,
         output: 'markdown',
       },
       prefs: { autoCopy: true },

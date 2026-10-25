@@ -21,6 +21,9 @@ Key differences:
 - **Show preview / Show source** toggle for rendered output, plus line, word
   and character counts and a `Ctrl/⌘ + Shift + C` copy shortcut
 - Option to **Convert headings to bold** (useful when pasting into rich web forms that fail to properly handle `#` headings during PDF-conversion)
+- **Tables** become GitHub-flavoured pipe tables (layout tables are unwrapped)
+  and **lists stay tight**, even when Word, Outlook or Google Docs wrap each
+  item in a paragraph or split one list into several
 - Options: `drop images`, `drop bold`, `drop italics`, `drop code`,
   `normalize punctuation`, `De-PDF` cleanup
 - Light and dark themes following the system setting

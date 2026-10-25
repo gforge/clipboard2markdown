@@ -137,4 +137,12 @@ dddd`;
       expect(defaultOut).not.toEqual(customOut);
     }
   });
+
+  it('drops private-use and zero-width characters and the empty paragraph they leave', () => {
+    const html =
+      '<p>ser f\u00f6rdelningen ut s\u00e5 h\u00e4r:</p><p>\uE117</p><p>Nav\u00ADel\u200Bstr\u00e4ng\uFEFF</p>';
+    expect(convert(html, 'HTML', {})).toBe(
+      'ser f\u00f6rdelningen ut s\u00e5 h\u00e4r:\n\nNavelstr\u00e4ng',
+    );
+  });
 });
